@@ -69,12 +69,33 @@ export default function Register() {
   };
   
   const handleDateInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const inputValue = e.target.value;
-    form.setValue('birthDateInput', inputValue);
+    // Permitir apenas números
+    const rawValue = e.target.value.replace(/\D/g, '');
     
-    if (inputValue.length === 10) {
-      const parsedDate = parse(inputValue, 'dd/MM/yyyy', new Date());
-      if (isValid(parsedDate)) {
+    // Formatar como DD/MM/AAAA à medida que o usuário digita
+    let formattedValue = '';
+    if (rawValue.length > 0) formattedValue += rawValue.substring(0, Math.min(2, rawValue.length));
+    if (rawValue.length > 2) formattedValue += '/' + rawValue.substring(2, Math.min(4, rawValue.length));
+    if (rawValue.length > 4) formattedValue += '/' + rawValue.substring(4, Math.min(8, rawValue.length));
+    
+    // Atualizar o campo
+    form.setValue('birthDateInput', formattedValue);
+    
+    // Converter para objeto Date se o valor for completo
+    if (rawValue.length === 8) {
+      const day = parseInt(rawValue.substring(0, 2));
+      const month = parseInt(rawValue.substring(2, 4)) - 1; // Meses em JS são 0-indexed
+      const year = parseInt(rawValue.substring(4, 8));
+      
+      const parsedDate = new Date(year, month, day);
+      
+      // Verificar se a data é válida
+      if (
+        parsedDate.getDate() === day &&
+        parsedDate.getMonth() === month &&
+        parsedDate.getFullYear() === year &&
+        parsedDate <= new Date() // Garantir que não é data futura
+      ) {
         form.setValue('birthDate', parsedDate);
       }
     }
@@ -234,11 +255,11 @@ export default function Register() {
                                 placeholder="DD/MM/AAAA"
                                 value={dateInputField.value}
                                 onChange={(e) => {
-                                  dateInputField.onChange(e);
                                   handleDateInputChange(e);
                                 }}
                                 className="w-full"
                                 maxLength={10}
+                                inputMode="numeric"
                               />
                             </FormControl>
                           )}
@@ -249,13 +270,13 @@ export default function Register() {
                             <Button
                               variant="outline"
                               type="button"
-                              className="px-2"
+                              className="p-2"
                               onClick={() => setDateInputOpen(true)}
                             >
-                              <Calendar className="h-4 w-4" />
+                              <Calendar className="h-5 w-5" />
                             </Button>
                           </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
+                          <PopoverContent className="w-auto p-0">
                             <CalendarComponent
                               mode="single"
                               selected={field.value}
@@ -263,18 +284,16 @@ export default function Register() {
                                 field.onChange(date);
                                 if (date) {
                                   form.setValue('birthDateInput', format(date, 'dd/MM/yyyy'));
+                                  setDateInputOpen(false);
                                 }
-                                setDateInputOpen(false);
                               }}
-                              disabled={(date) =>
-                                date > new Date() || date < new Date("1900-01-01")
-                              }
+                              disabled={(date) => date > new Date()}
                               initialFocus
-                              className="p-3 pointer-events-auto"
                             />
                           </PopoverContent>
                         </Popover>
                       </div>
+                      <p className="text-xs text-gray-500 mt-1">Digite apenas os números (DDMMAAAA) ou selecione no calendário</p>
                       <FormMessage />
                     </FormItem>
                   )}

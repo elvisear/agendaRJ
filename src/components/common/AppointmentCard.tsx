@@ -226,7 +226,7 @@ export default function AppointmentCard({
         <span>
           {location.name}
           {location.street && (
-            <span className="location-address"> - {location.street}, {location.number}</span>
+            <span className="location-address"> - {location.street}, {location.number}, {location.neighborhood}</span>
           )}
         </span>
       );

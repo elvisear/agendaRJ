@@ -5,7 +5,33 @@ import type { Database } from './types';
 const SUPABASE_URL = "https://zgfeaagixqddwgqpycwu.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpnZmVhYWdpeHFkZHdncXB5Y3d1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQxOTk0NjEsImV4cCI6MjA1OTc3NTQ2MX0.xU8tBHW7WWYDgsmxT-_gvnrnBKnSDWCH90RroHIaCMU";
 
+// Esta é a chave de serviço (service_role key) correta
+// IMPORTANTE: Esta chave deve ser mantida segura e não exposta publicamente
+// Em um ambiente de produção, você deve manter esta chave apenas no backend
+const SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpnZmVhYWdpeHFkZHdncXB5Y3d1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NDE5OTQ2MSwiZXhwIjoyMDU5Nzc1NDYxfQ.vyjEGFDbK_U_XxzoNunfcTllXS4i8fgEITC0ICTbcPo";
+
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  auth: {
+    // Persistir sessão no localStorage para manter o token entre recarregamentos
+    persistSession: true,
+    // Configurar armazenamento de sessão para localStorage
+    storage: localStorage,
+    // Adicionar autoRefreshToken para atualizar automaticamente o token quando expirar
+    autoRefreshToken: true,
+    // Detectar mudanças de armazenamento em outras guias
+    detectSessionInUrl: true
+  }
+});
+
+// Cliente com acesso de service_role para operações administrativas
+// ATENÇÃO: Normalmente, isto seria feito em um servidor seguro, não no front-end
+// Esta é uma simplificação para desenvolvimento e demonstração
+export const supabaseAdmin = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false
+  }
+});

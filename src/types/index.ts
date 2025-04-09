@@ -1,4 +1,3 @@
-
 export type UserRole = 'user' | 'operator' | 'master';
 
 export interface User {
@@ -39,6 +38,7 @@ export interface ServiceLocation {
   complement?: string;
   city: string;
   state: string;
+  address?: string;
 }
 
 export interface AdminSettings {
