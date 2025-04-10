@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
-import { Edit, Trash, MapPin, Calendar, Phone, User, Clock, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Edit, Trash, MapPin, Calendar, Phone, User, Clock, AlertCircle, MoreVertical, RefreshCw, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Appointment, ServiceLocation } from '@/types';
-import { getStatusLabel, formatCPF, formatDate } from '@/utils/formatters';
+import { getStatusLabel, formatCPF, formatDate, formatDateTime } from '@/utils/formatters';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -14,13 +14,22 @@ import {
 } from '@/components/ui/dialog';
 import { api } from '@/services/api';
 import { toast } from '@/components/ui/sonner';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface AppointmentCardProps {
   appointment: Appointment;
-  location: ServiceLocation | null;
-  onEdit: (id: string) => void;
-  onDelete: (id: string) => void;
-  onRefresh: () => void;
+  location?: ServiceLocation;
+  onEdit?: (id: string) => void;
+  onDelete?: (id: string) => void;
+  onRefresh?: () => void;
+  onProtocol?: (id: string) => void;
+  onComplete?: (id: string) => void;
+  showActions?: boolean;
 }
 
 export default function AppointmentCard({
@@ -29,49 +38,49 @@ export default function AppointmentCard({
   onEdit,
   onDelete,
   onRefresh,
+  onProtocol,
+  onComplete,
+  showActions = true,
 }: AppointmentCardProps) {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
-  const [location, setLocation] = useState<ServiceLocation | null>(propLocation);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [location, setLocation] = useState<ServiceLocation | null>(propLocation || null);
 
-  // Buscar local se não for fornecido pela prop
   useEffect(() => {
-    console.log("AppointmentCard - PropLocation:", propLocation);
-    console.log("AppointmentCard - Appointment.locationId:", appointment.locationId);
-    
     const fetchLocation = async () => {
-      // Sempre tentar buscar o local, mesmo que propLocation exista
-      if (appointment.locationId) {
-        console.log("AppointmentCard - Buscando location pelo ID:", appointment.locationId);
-        try {
-          // Estratégia 1: Tentar buscar pela API diretamente
-          const fetchedLocation = await api.getServiceLocationById(appointment.locationId);
-          
-          if (fetchedLocation) {
-            console.log("AppointmentCard - Location encontrado:", fetchedLocation);
-            setLocation(fetchedLocation);
-          } else {
-            console.warn("AppointmentCard - Location não encontrado para o ID:", appointment.locationId);
-            
-            // Estratégia 2: Se não encontrou e temos propLocation, usar propLocation
-            if (propLocation) {
-              console.log("AppointmentCard - Usando propLocation como fallback");
-              setLocation(propLocation);
-            }
-          }
-        } catch (error) {
-          console.error("AppointmentCard - Erro ao buscar local:", error);
-          
-          // Estratégia de fallback: usar propLocation se disponível
-          if (propLocation) {
-            console.log("AppointmentCard - Usando propLocation após erro");
-            setLocation(propLocation);
-          }
+      try {
+        // Se o location já foi fornecido nas props, não precisa buscar
+        if (propLocation) {
+          console.log("AppointmentCard - Location já fornecido via props:", propLocation.name);
+          setLocation(propLocation);
+          return;
         }
-      } else if (propLocation) {
-        // Se não temos locationId mas temos propLocation, usar propLocation
-        console.log("AppointmentCard - Usando propLocation (sem locationId)");
-        setLocation(propLocation);
+        
+        // Se não temos locationId, não podemos buscar
+        if (!appointment.locationId) {
+          console.warn("AppointmentCard - Agendamento sem locationId:", appointment.id);
+          return;
+        }
+        
+        // Verificar se o locationId é um UUID válido
+        const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidPattern.test(appointment.locationId)) {
+          console.warn(`AppointmentCard - LocationId não é um UUID válido: ${appointment.locationId}`);
+        }
+        
+        setLocationLoading(true);
+        const locationData = await api.getServiceLocation(appointment.locationId);
+        if (locationData) {
+          console.log("AppointmentCard - Location encontrado:", locationData);
+          setLocation(locationData);
+        } else {
+          console.log("AppointmentCard - Location não encontrado para o ID:", appointment.locationId);
+        }
+      } catch (error) {
+        console.error("Erro ao buscar localização:", error);
+      } finally {
+        setLocationLoading(false);
       }
     };
 
@@ -254,68 +263,70 @@ export default function AppointmentCard({
           getStatusColors()
         )}
       >
-        <div className="p-4" onClick={() => setIsDetailsOpen(true)}>
-          <div className="flex justify-between items-start mb-3">
+        <div className="p-3" onClick={() => setIsDetailsOpen(true)}>
+          <div className="flex justify-between items-start mb-2">
             <span className={cn(
-              "inline-block px-3 py-1 text-xs font-medium rounded-full",
+              "inline-block px-2 py-0.5 text-xs font-medium rounded-full",
               getStatusBadgeColor()
             )}>
               {statusLabel}
             </span>
-            <div className="flex space-x-1">
-              <button 
-                className="text-gray-500 hover:text-primary p-1 rounded-full hover:bg-white"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEdit(appointment.id);
-                }}
-              >
-                <Edit className="w-4 h-4" />
-              </button>
-              <button 
-                className="text-gray-500 hover:text-red-500 p-1 rounded-full hover:bg-white"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsConfirmingDelete(true);
-                }}
-              >
-                <Trash className="w-4 h-4" />
-              </button>
-            </div>
+            {showActions && appointment.status !== 'completed' && (
+              <div className="flex space-x-1">
+                <button 
+                  className="text-gray-500 hover:text-primary p-1 rounded-full hover:bg-white"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit && onEdit(appointment.id);
+                  }}
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                </button>
+                <button 
+                  className="text-gray-500 hover:text-red-500 p-1 rounded-full hover:bg-white"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsConfirmingDelete(true);
+                  }}
+                >
+                  <Trash className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
           </div>
           
-          <h3 className="font-medium text-gray-900 text-lg mb-2 flex items-center">
-            <User className="w-4 h-4 mr-2 text-gray-500" />
+          <h3 className="font-medium text-gray-900 text-base mb-1 flex items-center">
+            <User className="w-3.5 h-3.5 mr-1.5 text-gray-500" />
             {appointment.name}
           </h3>
           
-          <p className="text-sm text-gray-500 mb-2 flex items-center">
-            <span className="inline-block w-4 h-4 mr-2 opacity-70">🪪</span>
+          <p className="text-xs text-gray-500 mb-1.5 flex items-center">
+            <span className="inline-block w-3.5 h-3.5 mr-1.5 opacity-70">🪪</span>
             CPF: {formatCPF(appointment.cpf)}
           </p>
           
           {/* Informações de localização destacadas */}
-          <div className="mt-3 p-2 bg-white rounded-md border border-gray-100">
-            <p className="text-sm text-gray-700 flex items-center font-medium">
-              <MapPin className="w-4 h-4 mr-2 text-gray-500" />
+          <div className="mt-2 p-1.5 bg-white rounded-md border border-gray-100">
+            <p className="text-xs text-gray-700 flex items-center font-medium">
+              <MapPin className="w-3.5 h-3.5 mr-1.5 text-gray-500 flex-shrink-0" />
               {renderLocation()}
             </p>
             {location && (
-              <p className="text-xs text-gray-500 ml-6">
+              <p className="text-xs text-gray-500 ml-5">
                 {location.city}, {location.state}
               </p>
             )}
           </div>
           
           {appointment.queuePosition && (
-            <p className="mt-2 text-sm font-medium flex items-center">
-              <Clock className="w-4 h-4 mr-2 text-gray-500" />
+            <p className="mt-1.5 text-xs font-medium flex items-center">
+              <Clock className="w-3.5 h-3.5 mr-1.5 text-gray-500" />
               Posição na fila: {appointment.queuePosition}
             </p>
           )}
           
-          <p className="text-xs text-gray-500 mt-3 flex items-center">
-            <Calendar className="w-3 h-3 mr-2" />
+          <p className="text-xs text-gray-500 mt-2 flex items-center">
+            <Calendar className="w-3 h-3 mr-1.5" />
             Agendado em: {formatDate(appointment.createdAt)}
           </p>
         </div>
@@ -387,8 +398,12 @@ export default function AppointmentCard({
             <Button variant="outline" onClick={() => setIsConfirmingDelete(false)}>
               Cancelar
             </Button>
-            <Button variant="destructive" onClick={handleDelete}>
-              Excluir
+            <Button 
+              variant="destructive" 
+              onClick={handleDelete}
+              disabled={appointment.status === 'completed'}
+            >
+              {appointment.status === 'completed' ? 'Não permitido' : 'Excluir'}
             </Button>
           </DialogFooter>
         </DialogContent>

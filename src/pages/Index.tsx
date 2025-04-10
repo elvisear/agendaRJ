@@ -26,7 +26,7 @@ export default function Index() {
             </Button>
             <Button 
               variant="outline" 
-              className="text-white border-white hover:bg-white hover:text-primary"
+              className="text-orange-500 border-white hover:border-orange-500 hover:bg-white hover:text-primary"
               onClick={() => navigate('/register')}
             >
               Cadastrar

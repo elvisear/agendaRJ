@@ -29,7 +29,7 @@ import {
 } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
-import { formatCPF, formatPhone, phoneToInternational } from '@/utils/formatters';
+import { formatCPF, formatPhone, phoneToInternational, validateCPF } from '@/utils/formatters';
 import { useAuth } from '@/contexts/AuthContext';
 
 const registerSchema = z.object({
@@ -37,7 +37,9 @@ const registerSchema = z.object({
   email: z.string().email({ message: 'Email inválido' }),
   password: z.string().min(6, { message: 'A senha deve ter pelo menos 6 caracteres' }),
   confirmPassword: z.string().min(6, { message: 'Confirme sua senha' }),
-  cpf: z.string().min(11, { message: 'CPF inválido' }),
+  cpf: z.string()
+    .min(11, { message: 'CPF deve ter 11 dígitos' })
+    .refine((cpf) => validateCPF(cpf), { message: 'CPF inválido' }),
   birthDate: z.date({ required_error: 'Data de nascimento é obrigatória' }),
   birthDateInput: z.string().optional(),
   whatsapp: z.string().min(10, { message: 'Número de WhatsApp inválido' }),

@@ -1,4 +1,3 @@
-
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -107,4 +106,44 @@ export function calculateAge(birthdate: string): number {
   }
   
   return age;
+}
+
+// Função para validar CPF - algoritmo oficial
+export function validateCPF(cpf: string): boolean {
+  // Remover caracteres não numéricos
+  const cleanCpf = cpf.replace(/\D/g, '');
+  
+  // Verificar se tem 11 dígitos
+  if (cleanCpf.length !== 11) {
+    return false;
+  }
+  
+  // Verificar se todos os dígitos são iguais (caso inválido)
+  if (/^(\d)\1{10}$/.test(cleanCpf)) {
+    return false;
+  }
+  
+  // Validação do primeiro dígito verificador
+  let sum = 0;
+  for (let i = 0; i < 9; i++) {
+    sum += parseInt(cleanCpf.charAt(i)) * (10 - i);
+  }
+  
+  let remainder = sum % 11;
+  const digit1 = remainder < 2 ? 0 : 11 - remainder;
+  
+  if (parseInt(cleanCpf.charAt(9)) !== digit1) {
+    return false;
+  }
+  
+  // Validação do segundo dígito verificador
+  sum = 0;
+  for (let i = 0; i < 10; i++) {
+    sum += parseInt(cleanCpf.charAt(i)) * (11 - i);
+  }
+  
+  remainder = sum % 11;
+  const digit2 = remainder < 2 ? 0 : 11 - remainder;
+  
+  return parseInt(cleanCpf.charAt(10)) === digit2;
 }

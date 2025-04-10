@@ -1,9 +1,9 @@
-
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLocation } from 'react-router-dom';
 import { api } from '@/services/api';
-import { Appointment, ServiceLocation } from '@/types';
-import { PlayCircle, CheckCircle, XCircle, AlertCircle, Camera } from 'lucide-react';
+import { Appointment, ServiceLocation, User, UserRole } from '@/types';
+import { PlayCircle, CheckCircle, XCircle, AlertCircle, Camera, UserCheck, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -16,45 +16,206 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/sonner';
 import { formatCPF } from '@/utils/formatters';
+import { supabaseAdmin } from '@/integrations/supabase/client';
 
 export default function AppointmentManagement() {
   const { currentUser } = useAuth();
+  const location = useLocation();
+  const isTaskDistribution = location.pathname === '/task-distribution';
+  const isMaster = currentUser?.role === 'master';
+  
+  console.log("AppointmentManagement - mounting with path:", location.pathname);
+  console.log("AppointmentManagement - is task distribution:", isTaskDistribution);
+  console.log("AppointmentManagement - current user:", currentUser?.name, "role:", currentUser?.role);
+  
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [locations, setLocations] = useState<ServiceLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [confirmingStart, setConfirmingStart] = useState<string | null>(null);
   const [confirmingComplete, setConfirmingComplete] = useState<string | null>(null);
   const [confirmingAbandon, setConfirmingAbandon] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
   const [abandonReason, setAbandonReason] = useState('');
   const [protocol, setProtocol] = useState<string | null>(null);
+  const [operators, setOperators] = useState<User[]>([]);
+  const [assigningTo, setAssigningTo] = useState<{appointmentId: string, operatorId: string} | null>(null);
+  
+  // Função para formatar a data de criação
+  const formatDate = (dateString: string) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+  
+  // Função para obter o nome do operador
+  const getOperatorName = (operatorId: string | undefined) => {
+    if (!operatorId) return '-';
+    const operator = operators.find(op => op.id === operatorId);
+    return operator ? operator.name : 'Operador não encontrado';
+  };
+  
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      // Fetch locations first to ensure they're available for validation
+      console.log("AppointmentManagement - fetching locations");
+      const locationsData = await api.getAllServiceLocations();
+      setLocations(locationsData);
+      console.log("AppointmentManagement - locations loaded:", locationsData.length, locationsData);
+      
+      // Fetch all operators regardless of page (needed for operator name display)
+      console.log("AppointmentManagement - fetching all operators");
+      const operatorsData = await api.getAllUsers();
+      const filteredOperators = operatorsData.filter(user => ['operator', 'master'].includes(user.role));
+      setOperators(filteredOperators);
+      console.log("AppointmentManagement - operators loaded:", filteredOperators.length);
+      
+      // Fetch appointments based on route
+      if (currentUser?.id) {
+        console.log("AppointmentManagement - fetching appointments for user:", currentUser.id);
+        let appointmentsData: Appointment[] = [];
+        
+        if (isTaskDistribution) {
+          // For task distribution page, get all unassigned appointments
+          console.log("AppointmentManagement - fetching unassigned appointments for distribution");
+          appointmentsData = await api.getUnassignedAppointments();
+          console.log("AppointmentManagement - unassigned appointments raw data:", appointmentsData);
+          
+          // Em vez de filtrar, apenas registrar quais agendamentos têm problemas para debug
+          appointmentsData.forEach(appointment => {
+            const locationExists = locationsData.some(loc => loc.id === appointment.locationId);
+            if (!locationExists) {
+              console.warn(`Aviso: Agendamento com ID ${appointment.id} tem locationId ${appointment.locationId} que não está na lista de locais carregados`);
+            }
+          });
+        } else if (isMaster) {
+          // If user is master, get all appointments in service
+          console.log("AppointmentManagement - user is master, fetching all in-service appointments");
+          appointmentsData = await api.getAllInServiceAppointments();
+        } else {
+          // For appointment management page, get appointments assigned to this operator
+          console.log("AppointmentManagement - fetching appointments for this operator");
+          
+          // Buscar agendamentos atribuídos ao operador
+          try {
+            const operatorAppointments = await api.getAppointmentsByOperator(currentUser.id);
+            
+            // Verificar agendamentos e registrar informações para debug
+            console.log(`Encontrados ${operatorAppointments.length} agendamentos atribuídos ao operador ${currentUser.id}`);
+            
+            if (operatorAppointments.length === 0) {
+              // Se não houver agendamentos, verificar o banco diretamente para debug
+              console.log("Verificando agendamentos no banco para este operador");
+              const { data, error } = await supabaseAdmin
+                .from('appointments')
+                .select('*')
+                .eq('operatorId', currentUser.id);
+                
+              if (error) {
+                console.error("Erro ao verificar agendamentos no banco:", error);
+              } else {
+                console.log(`Consulta direta ao banco: ${data?.length || 0} agendamentos encontrados para o operador ${currentUser.id}`);
+                if (data && data.length > 0) {
+                  console.log("Primeiros agendamentos encontrados:", data.slice(0, 3));
+                }
+              }
+            }
+            
+            appointmentsData = operatorAppointments;
+          } catch (error) {
+            console.error("Erro ao buscar agendamentos do operador:", error);
+            appointmentsData = [];
+          }
+        }
+        
+        console.log("AppointmentManagement - appointments loaded:", appointmentsData.length);
+        
+        // Garantir que os agendamentos tenham o status correto
+        if (!isTaskDistribution && !isMaster) {
+          // Registrar status de cada agendamento para debug
+          const statusCount: Record<string, number> = {};
+          appointmentsData.forEach(app => {
+            statusCount[app.status] = (statusCount[app.status] || 0) + 1;
+          });
+          console.log("Distribuição de status dos agendamentos:", statusCount);
+        }
+        
+        setAppointments(appointmentsData);
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast.error('Erro ao carregar dados');
+    } finally {
+      setLoading(false);
+    }
+  };
   
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        // Fetch locations
-        const locationsData = await api.getServiceLocations();
-        setLocations(locationsData);
-        
-        // Fetch appointments assigned to this operator
-        if (currentUser?.id) {
-          const appointmentsData = await api.getAppointmentsByOperator(currentUser.id);
-          setAppointments(appointmentsData);
-        }
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        toast.error('Erro ao carregar dados');
-      } finally {
-        setLoading(false);
-      }
-    };
-    
     fetchData();
-  }, [currentUser?.id]);
+  }, [currentUser?.id, isTaskDistribution]);
   
+  // Função para obter o nome da cidade do local de atendimento
   const getLocationName = (locationId: string) => {
+    if (!locationId) {
+      console.warn("Location ID indefinido");
+      return 'Local não especificado';
+    }
+    
+    // Busca exata pelo ID
     const location = locations.find(loc => loc.id === locationId);
-    return location ? location.city : 'Local não encontrado';
+    if (location) {
+      return location.city || 'Cidade não especificada';
+    }
+    
+    // Tentativas de encontrar correspondências alternativas
+    
+    // 1. Correspondência parcial pelo início do UUID
+    const partialMatch = locations.find(loc => 
+      locationId.startsWith(loc.id.substring(0, 8)) || 
+      loc.id.startsWith(locationId.substring(0, 8))
+    );
+    
+    if (partialMatch) {
+      return partialMatch.city;
+    }
+    
+    // 2. Para IDs numéricos, busca pelo final do UUID
+    if (/^\d+$/.test(locationId)) {
+      const numericMatch = locations.find(loc => {
+        const locNumericPart = loc.id.replace(/^.*-/, '').replace(/^0+/, '');
+        return locNumericPart === locationId.replace(/^0+/, '');
+      });
+      
+      if (numericMatch) {
+        return numericMatch.city;
+      }
+    }
+    
+    // Se não conseguir encontrar, retorne um valor padrão
+    return 'Local não identificado';
+  };
+
+  // Função para deletar um agendamento
+  const handleDeleteAppointment = async (appointmentId: string) => {
+    setLoading(true);
+    try {
+      console.log(`Excluindo agendamento ${appointmentId}`);
+      await api.deleteAppointment(appointmentId);
+      
+      // Remover o agendamento da lista
+      setAppointments(prev => prev.filter(app => app.id !== appointmentId));
+      
+      toast.success('Agendamento excluído com sucesso');
+    } catch (error) {
+      console.error('Erro ao excluir agendamento:', error);
+      toast.error('Erro ao excluir agendamento');
+    } finally {
+      setLoading(false);
+      setConfirmingDelete(null);
+    }
   };
   
   const handleStartService = async (appointmentId: string) => {
@@ -201,6 +362,32 @@ export default function AppointmentManagement() {
     }
   };
   
+  // Handle assigning operator to an appointment
+  const handleAssignOperator = async () => {
+    if (!assigningTo) return;
+    
+    setLoading(true);
+    try {
+      const { appointmentId, operatorId } = assigningTo;
+      console.log("Atribuindo operador:", operatorId, "ao agendamento:", appointmentId);
+      
+      const updated = await api.assignOperator(appointmentId, operatorId);
+      
+      // Update appointments list - remove the assigned appointment
+      setAppointments(prev => 
+        prev.filter(app => app.id !== appointmentId)
+      );
+      
+      toast.success('Agendamento atribuído com sucesso');
+    } catch (error) {
+      console.error('Error assigning operator:', error);
+      toast.error('Erro ao atribuir operador');
+    } finally {
+      setLoading(false);
+      setAssigningTo(null);
+    }
+  };
+  
   if (loading && appointments.length === 0) {
     return (
       <div className="p-8 flex items-center justify-center min-h-screen">
@@ -215,22 +402,36 @@ export default function AppointmentManagement() {
   return (
     <div className="p-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Atendimentos</h1>
+        <h1 className="text-3xl font-bold text-gray-900">
+          {isTaskDistribution ? 'Distribuição de Tarefas' : 'Atendimentos'}
+        </h1>
         <p className="text-gray-600 mt-1">
-          Gerencie os agendamentos atribuídos a você
+          {isTaskDistribution 
+            ? 'Distribua os agendamentos para os operadores disponíveis'
+            : 'Gerencie os agendamentos atribuídos a você'}
         </p>
       </div>
       
-      {appointments.length === 0 ? (
+      {loading ? (
+        <div className="p-8 flex items-center justify-center min-h-[300px]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-gray-600">Carregando agendamentos...</p>
+          </div>
+        </div>
+      ) : appointments.length === 0 ? (
         <div className="bg-white rounded-lg shadow-md p-8 text-center">
           <AlertCircle className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-          <h2 className="text-xl font-semibold mb-2">Nenhum agendamento</h2>
+          <h2 className="text-xl font-semibold mb-2">
+            {isTaskDistribution 
+              ? 'Nenhum agendamento pendente'
+              : 'Nenhum agendamento'}
+          </h2>
           <p className="text-gray-600 mb-6">
-            Você não possui agendamentos atribuídos no momento.
+            {isTaskDistribution 
+              ? 'Não há agendamentos pendentes para distribuir no momento.'
+              : 'Você não possui agendamentos atribuídos no momento.'}
           </p>
-          <Button onClick={() => window.location.reload()}>
-            Atualizar
-          </Button>
         </div>
       ) : (
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
@@ -238,9 +439,11 @@ export default function AppointmentManagement() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Posição
-                  </th>
+                  {!isTaskDistribution && (
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Posição
+                    </th>
+                  )}
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Nome
                   </th>
@@ -253,6 +456,14 @@ export default function AppointmentManagement() {
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Status
                   </th>
+                  {(!isTaskDistribution && isMaster) && (
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Operador
+                    </th>
+                  )}
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Data
+                  </th>
                   <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Ações
                   </th>
@@ -261,11 +472,13 @@ export default function AppointmentManagement() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {appointments.map((appointment) => (
                   <tr key={appointment.id}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {appointment.queuePosition || '-'}
-                      </div>
-                    </td>
+                    {!isTaskDistribution && (
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {appointment.queuePosition || '-'}
+                        </div>
+                      </td>
+                    )}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">
                         {appointment.name}
@@ -286,53 +499,96 @@ export default function AppointmentManagement() {
                         appointment.status === 'assigned' ? 'bg-blue-100 text-blue-800' :
                         appointment.status === 'waiting' ? 'bg-yellow-100 text-yellow-800' :
                         appointment.status === 'in_service' ? 'bg-green-100 text-green-800' :
+                        appointment.status === 'pending' ? 'bg-purple-100 text-purple-800' :
                         'bg-gray-100 text-gray-800'
                       }`}>
                         {appointment.status === 'assigned' ? 'Atribuído' :
                          appointment.status === 'waiting' ? 'Em espera' :
                          appointment.status === 'in_service' ? 'Em atendimento' :
+                         appointment.status === 'pending' ? 'Pendente' :
                          appointment.status}
                       </span>
                     </td>
+                    {(!isTaskDistribution && isMaster) && (
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-500">
+                          {getOperatorName(appointment.operatorId)}
+                        </div>
+                      </td>
+                    )}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-500" title={appointment.createdAt}>
+                        {formatDate(appointment.createdAt)}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end gap-2">
-                        {appointment.status !== 'in_service' && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="flex items-center gap-1 text-green-600 hover:text-green-700 hover:bg-green-50"
-                            onClick={() => setConfirmingStart(appointment.id)}
-                            disabled={loading}
-                            title="Iniciar atendimento"
-                          >
-                            <PlayCircle className="h-4 w-4" />
-                            <span className="sr-only md:not-sr-only md:inline">Iniciar</span>
-                          </Button>
+                        {isTaskDistribution ? (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex items-center gap-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              onClick={() => setAssigningTo({ appointmentId: appointment.id, operatorId: '' })}
+                              disabled={loading}
+                              title="Atribuir a um operador"
+                            >
+                              <UserCheck className="h-4 w-4" />
+                              <span className="sr-only md:not-sr-only md:inline">Atribuir</span>
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex items-center gap-1 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => setConfirmingDelete(appointment.id)}
+                              disabled={loading}
+                              title="Excluir agendamento"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              <span className="sr-only md:not-sr-only md:inline">Excluir</span>
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            {appointment.status !== 'in_service' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="flex items-center gap-1 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                onClick={() => setConfirmingStart(appointment.id)}
+                                disabled={loading}
+                                title="Iniciar atendimento"
+                              >
+                                <PlayCircle className="h-4 w-4" />
+                                <span className="sr-only md:not-sr-only md:inline">Iniciar</span>
+                              </Button>
+                            )}
+                            
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex items-center gap-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              onClick={() => setConfirmingComplete(appointment.id)}
+                              disabled={loading || appointment.status !== 'in_service'}
+                              title={appointment.status !== 'in_service' ? "Atendimento precisa ser iniciado primeiro" : "Finalizar atendimento"}
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                              <span className="sr-only md:not-sr-only md:inline">Finalizar</span>
+                            </Button>
+                            
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex items-center gap-1 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => setConfirmingAbandon(appointment.id)}
+                              disabled={loading}
+                              title="Desistir do atendimento"
+                            >
+                              <XCircle className="h-4 w-4" />
+                              <span className="sr-only md:not-sr-only md:inline">Desistir</span>
+                            </Button>
+                          </>
                         )}
-                        
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="flex items-center gap-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                          onClick={() => setConfirmingComplete(appointment.id)}
-                          disabled={loading}
-                          title="Finalizar atendimento"
-                        >
-                          <CheckCircle className="h-4 w-4" />
-                          <span className="sr-only md:not-sr-only md:inline">Finalizar</span>
-                        </Button>
-                        
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="flex items-center gap-1 text-red-600 hover:text-red-700 hover:bg-red-50"
-                          onClick={() => setConfirmingAbandon(appointment.id)}
-                          disabled={loading}
-                          title="Desistir do atendimento"
-                        >
-                          <XCircle className="h-4 w-4" />
-                          <span className="sr-only md:not-sr-only md:inline">Desistir</span>
-                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -475,6 +731,72 @@ export default function AppointmentManagement() {
               disabled={loading || !abandonReason}
             >
               {loading ? 'Processando...' : 'Desistir'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Assign Operator Dialog */}
+      <Dialog open={!!assigningTo} onOpenChange={() => setAssigningTo(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Atribuir Operador</DialogTitle>
+            <DialogDescription>
+              Selecione um operador para atribuir a este agendamento.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Operador:</label>
+              <select 
+                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={assigningTo?.operatorId || ''}
+                onChange={(e) => setAssigningTo(prev => prev ? { ...prev, operatorId: e.target.value } : null)}
+              >
+                <option value="" disabled>Selecione um operador</option>
+                {operators.map(operator => (
+                  <option key={operator.id} value={operator.id}>
+                    {operator.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssigningTo(null)} disabled={loading}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleAssignOperator} 
+              disabled={loading || !assigningTo?.operatorId}
+            >
+              {loading ? 'Processando...' : 'Atribuir'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Delete Appointment Dialog */}
+      <Dialog open={!!confirmingDelete} onOpenChange={() => setConfirmingDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir Agendamento</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja excluir este agendamento? Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmingDelete(null)} disabled={loading}>
+              Cancelar
+            </Button>
+            <Button 
+              variant="destructive"
+              onClick={() => confirmingDelete && handleDeleteAppointment(confirmingDelete)} 
+              disabled={loading}
+            >
+              {loading ? 'Processando...' : 'Excluir'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,8 +1,10 @@
-
-import { useNavigate, useLocation } from "react-router-dom";
-import { Calendar, Clock, Home, Map, Settings, Users, BarChart, List, LogOut } from "lucide-react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Calendar, Clock, Home, Map, Settings, Users, BarChart, List, LogOut, Wrench, MapPin, LineChart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/sonner";
+import { api } from "@/services/api";
 
 interface SidebarLinkProps {
   to: string;
@@ -34,22 +36,42 @@ const SidebarLink: React.FC<SidebarLinkProps> = ({ to, label, icon, isActive }) 
 
 export default function Sidebar() {
   const { pathname } = useLocation();
-  const { userRole, logout } = useAuth();
+  const { userRole, logout, currentUser, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
-  // Define routes based on user role
+  console.log("Sidebar - Current user role:", userRole);
+  console.log("Sidebar - Is authenticated:", isAuthenticated);
+
+  // Definição de todas as rotas possíveis
   const routes = [
-    { path: "/dashboard", label: "Início", icon: <Home />, roles: ["operator", "master"] },
-    { path: "/appointments-management", label: "Atendimento", icon: <List />, roles: ["operator", "master"] },
-    { path: "/task-distribution", label: "Distribuição de Tarefas", icon: <Clock />, roles: ["master"] },
-    { path: "/service-locations", label: "Postos de Atendimento", icon: <Map />, roles: ["master"] },
-    { path: "/users", label: "Usuários", icon: <Users />, roles: ["master"] },
-    { path: "/admin", label: "Administração", icon: <Settings />, roles: ["master"] },
-    { path: "/statistics", label: "Estatísticas", icon: <BarChart />, roles: ["master"] },
+    { path: "/dashboard", label: "Início", icon: <Home />, roles: ["user", "operator", "master"], requiresAuth: true },
+    { path: "/appointments", label: "Agendamentos", icon: <Calendar />, roles: ["user", "operator", "master"], requiresAuth: false },
+    { path: "/appointments-management", label: "Atendimento", icon: <List />, roles: ["operator", "master"], requiresAuth: true },
+    { path: "/task-distribution", label: "Distribuição de Tarefas", icon: <Clock />, roles: ["master"], requiresAuth: true },
+    { path: "/service-locations", label: "Postos de Atendimento", icon: <Map />, roles: ["master"], requiresAuth: true },
+    { path: "/users", label: "Usuários", icon: <Users />, roles: ["master"], requiresAuth: true },
+    { path: "/admin", label: "Administração", icon: <Settings />, roles: ["master"], requiresAuth: true },
+    { path: "/statistics", label: "Estatísticas", icon: <BarChart />, roles: ["master"], requiresAuth: true },
   ];
   
-  // Filter routes based on user role
-  const availableRoutes = routes.filter(route => route.roles.includes(userRole || ''));
+  // Filtra rotas com base no papel do usuário e estado de autenticação
+  const availableRoutes = routes.filter(route => {
+    // Se a rota requer autenticação e o usuário não está autenticado, não mostrar
+    if (route.requiresAuth && !isAuthenticated) {
+      return false;
+    }
+    
+    // Se a rota não requer autenticação, mostrar independentemente de papel
+    if (!route.requiresAuth) {
+      return true;
+    }
+    
+    // Se chegou aqui, a rota requer autenticação e o usuário está autenticado
+    // Então verificamos se o papel do usuário tem acesso
+    return route.roles.includes(userRole || '');
+  });
+
+  console.log("Sidebar - Available routes:", availableRoutes.map(r => r.path));
 
   const handleLogout = () => {
     logout();
@@ -79,15 +101,17 @@ export default function Sidebar() {
         </ul>
       </nav>
       
-      <div className="p-4 border-t">
-        <button
-          className="flex items-center gap-3 px-4 py-3 w-full rounded-lg text-gray-700 hover:bg-red-100 transition-colors"
-          onClick={handleLogout}
-        >
-          <LogOut className="w-5 h-5" />
-          <span className="text-sm font-medium">Sair</span>
-        </button>
-      </div>
+      {isAuthenticated && (
+        <div className="p-4 border-t">
+          <button
+            className="flex items-center gap-3 px-4 py-3 w-full rounded-lg text-gray-700 hover:bg-red-100 transition-colors"
+            onClick={handleLogout}
+          >
+            <LogOut className="w-5 h-5" />
+            <span className="text-sm font-medium">Sair</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

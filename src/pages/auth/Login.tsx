@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Calendar, Eye, EyeOff, ArrowLeft, Mail, CheckCircle } from 'lucide-react';
+import { Calendar, Eye, EyeOff, ArrowLeft, Mail, CheckCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -36,6 +36,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [error, setError] = useState('');
   
   // Verificar se estamos em ambiente de desenvolvimento
   const isDevelopment = window.location.hostname === 'localhost' || 
@@ -50,30 +51,39 @@ export default function Login() {
     },
   });
   
-  const onSubmit = async (values: LoginFormValues) => {
-    setIsLoading(true);
+  const onSubmit = async (data: LoginFormValues) => {
     try {
-      // Se o navegador estiver perguntando para salvar senha e o usuário aceitar,
-      // o navegador preencherá automaticamente o formulário na próxima visita
-      await login(values.email, values.password);
-      toast({
-        title: 'Login realizado com sucesso',
-        description: 'Redirecionando para o painel...',
-      });
-      navigate('/dashboard');
-    } catch (error: any) {
-      let description = error.message || 'Verifique suas credenciais';
+      setIsLoading(true);
+      setError('');
       
-      // Verificar se a mensagem é sobre confirmação de email
-      if (error.message?.includes('Email not confirmed')) {
-        description = 'Por favor, confirme seu email antes de fazer login. Verifique sua caixa de entrada.';
+      console.log('[Login] Tentando fazer login com:', data.email);
+      
+      try {
+        const userData = await login(data.email, data.password);
+        
+        // O AuthContext já garante que usuários inativos não são autenticados
+        // então se chegamos aqui, o usuário está ativo
+        console.log('[Login] Login bem-sucedido:', userData);
+        toast({
+          title: 'Login realizado com sucesso',
+          description: `Bem-vindo, ${userData.name}!`,
+          variant: 'default',
+        });
+        
+        console.log('[Login] Redirecionando para dashboard');
+        navigate('/dashboard');
+      } catch (err) {
+        console.error('[Login] Falha no login:', err);
+        const errorMessage = err instanceof Error ? err.message : 'Falha no login';
+        
+        // Verificar se é uma mensagem de usuário inativo
+        if (errorMessage.includes('inativo')) {
+          setError('Seu usuário está inativo no sistema! Por favor entre em contato com a administração do sistema.');
+        } else {
+          // Exibir a mensagem de erro que vem diretamente do AuthContext
+          setError(errorMessage);
+        }
       }
-      
-      toast({
-        title: 'Erro no login',
-        description,
-        variant: 'destructive',
-      });
     } finally {
       setIsLoading(false);
     }
@@ -195,7 +205,7 @@ export default function Login() {
                   <FormLabel htmlFor="password">Senha</FormLabel>
                   <div className="relative">
                     <FormControl>
-                      <Input
+                      <Input 
                         id="password"
                         name="password"
                         type={showPassword ? 'text' : 'password'}
@@ -222,6 +232,12 @@ export default function Login() {
               )}
             />
             
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-800 rounded-md p-3 text-sm">
+                {error}
+              </div>
+            )}
+            
             <FormField
               control={form.control}
               name="rememberMe"
@@ -245,21 +261,28 @@ export default function Login() {
                 </FormItem>
               )}
             />
-            
-            <Button
-              type="submit"
+
+            <Button 
+              type="submit" 
               className="w-full bg-primary hover:bg-primary-dark"
               disabled={isLoading}
             >
-              {isLoading ? "Entrando..." : "Entrar"}
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Entrando...
+                </>
+              ) : (
+                "Entrar"
+              )}
             </Button>
           </form>
         </Form>
-        
+
         <div className="mt-6 text-center">
-          <p className="text-gray-600">
+          <p className="text-sm text-gray-600">
             Não tem uma conta?{' '}
-            <Link to="/register" className="text-primary hover:underline">
+            <Link to="/auth/register" className="text-primary hover:underline">
               Registre-se
             </Link>
           </p>

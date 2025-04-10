@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
-import { User, Calendar, CheckCircle, Clock, AlertCircle, X } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import React, { useEffect, useState, useMemo } from 'react';
+import { User, Calendar, CheckCircle, Clock, AlertCircle, X, CalendarPlus, MapPin, ClipboardCheck, Filter } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/services/api';
-import { Appointment } from '@/types';
+import { Appointment, ServiceLocation, AppointmentStatus } from '@/types';
 import AppointmentCard from '@/components/common/AppointmentCard';
+import { Link, useNavigate } from 'react-router-dom';
+import { supabaseAdmin } from '@/integrations/supabase/client';
 import {
   Dialog,
   DialogContent,
@@ -14,60 +16,192 @@ import {
   DialogTitle
 } from '@/components/ui/dialog';
 import AppointmentForm from '@/components/common/AppointmentForm';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function Dashboard() {
   console.log("Dashboard component initializing");
   
-  const { currentUser } = useAuth();
-  console.log("Current user from auth context:", currentUser);
-  
+  const { currentUser, updateUserRole } = useAuth();
+  const navigate = useNavigate();
   const { toast } = useToast();
+  
+  // Define all state hooks at the top level
   const [stats, setStats] = useState<any>(null);
-  const [recentAppointments, setRecentAppointments] = useState<Appointment[]>([]);
+  const [locations, setLocations] = useState<ServiceLocation[]>([]);
+  const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
+  const [filteredAppointments, setFilteredAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isNewAppointmentOpen, setIsNewAppointmentOpen] = useState(false);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [availableStatuses, setAvailableStatuses] = useState<string[]>([]);
   
-  // Renderizar algo mínimo em caso de erro catastrófico
-  if (!currentUser) {
-    console.log("No current user found in Dashboard");
-    return (
-      <div className="p-8 text-center">
-        <h1 className="text-2xl font-bold">Aguarde um momento</h1>
-        <p className="mt-2">Carregando suas informações...</p>
-      </div>
-    );
-  }
+  // Define all computed values after hooks
+  const recentAppointments = useMemo(() => {
+    // Filtrar agendamentos com locationId válido apenas
+    const validAppointments = filteredAppointments.filter(appointment => {
+      // Verificar se o locationId existe na lista de locais
+      const locationExists = locations.some(loc => loc.id === appointment.locationId);
+      if (!locationExists) {
+        console.log(`Ignorando agendamento ${appointment.id} com local inválido: ${appointment.locationId}`);
+      }
+      return locationExists;
+    });
+    
+    // Obter apenas os 3 primeiros agendamentos válidos
+    return validAppointments.slice(0, 3);
+  }, [filteredAppointments, locations]);
+
+  console.log("Current user from auth context:", currentUser);
   
+  // Function to get status icon - moved before any conditional returns
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return <Clock className="h-5 w-5 text-status-pending" />;
+      case 'waiting':
+      case 'assigned':
+      case 'in_service':
+        return <Clock className="h-5 w-5 text-status-waiting" />;
+      case 'completed':
+        return <CheckCircle className="h-5 w-5 text-status-completed" />;
+      case 'cancelled':
+        return <X className="h-5 w-5 text-status-cancelled" />;
+      default:
+        return <AlertCircle className="h-5 w-5 text-gray-400" />;
+    }
+  };
+  
+  // Apply filter function
+  const applyStatusFilter = (appointments: Appointment[], filter: string) => {
+    if (filter === 'all') {
+      return appointments;
+    }
+    return appointments.filter(a => a.status === filter);
+  };
+  
+  // Handle filter change
+  const handleFilterChange = (value: string) => {
+    setStatusFilter(value);
+    setFilteredAppointments(applyStatusFilter(allAppointments, value));
+  };
+
+  // Function to handle new appointment creation
+  const handleNewAppointment = async (data: any) => {
+    try {
+      console.log('Creating new appointment:', data);
+      await api.createAppointment(data);
+      toast({
+        title: "Agendamento criado com sucesso!",
+        description: "Seu agendamento foi registrado no sistema.",
+        variant: "default"
+      });
+      setIsCreateDialogOpen(false);
+      
+      // Refresh appointments
+      fetchAppointmentsBasedOnRole();
+    } catch (error) {
+      console.error('Error creating appointment:', error);
+      toast({
+        title: "Erro ao criar agendamento",
+        description: "Não foi possível criar o agendamento. Tente novamente.",
+        variant: "destructive"
+      });
+    }
+  };
+  
+  // Separate function to fetch appointments based on role
+  const fetchAppointmentsBasedOnRole = async () => {
+    try {
+      if (!currentUser) return;
+      
+      // Get all available statuses
+      const allStatuses = api.getAllAppointmentStatuses();
+      setAvailableStatuses(['all', ...allStatuses]);
+      
+      if (currentUser?.role === 'operator') {
+        console.log("Fetching operator appointments");
+        // For operators, show their assigned appointments and appointments linked to their CPF
+        const operatorAppointments = await api.getAppointmentsByOperator(currentUser.id);
+        const personalAppointments = await api.getAppointmentsByCPF(currentUser.cpf);
+        
+        // Combine both lists, removing duplicates
+        const combinedAppointments = [...operatorAppointments];
+        personalAppointments.forEach(app => {
+          if (!combinedAppointments.some(a => a.id === app.id)) {
+            combinedAppointments.push(app);
+          }
+        });
+        
+        setAllAppointments(combinedAppointments);
+        setFilteredAppointments(applyStatusFilter(combinedAppointments, statusFilter));
+      } else if (currentUser?.role === 'master') {
+        console.log("Fetching all appointments for master");
+        // For master, fetch all appointments
+        const { data, error } = await supabaseAdmin
+          .from('appointments')
+          .select('*');
+          
+        if (error) {
+          console.error("Error fetching all appointments:", error);
+          // Fallback to combination of local methods
+          const pendingAppts = await api.getPendingAppointments();
+          const inServiceAppts = await api.getAllInServiceAppointments();
+          const allAppts = [...pendingAppts, ...inServiceAppts];
+          setAllAppointments(allAppts);
+          setFilteredAppointments(applyStatusFilter(allAppts, statusFilter));
+        } else {
+          setAllAppointments(data || []);
+          setFilteredAppointments(applyStatusFilter(data || [], statusFilter));
+        }
+      } else if (currentUser?.role === 'user' && currentUser?.cpf) {
+        console.log("Fetching user appointments by CPF:", currentUser.cpf);
+        // For regular users, fetch their appointments by CPF
+        const userAppointments = await api.getAppointmentsByCPF(currentUser.cpf);
+        console.log("User appointments found:", userAppointments.length);
+        setAllAppointments(userAppointments);
+        setFilteredAppointments(applyStatusFilter(userAppointments, statusFilter));
+      }
+    } catch (error) {
+      console.error('Error fetching appointments:', error);
+      toast({
+        title: 'Erro ao carregar agendamentos',
+        description: 'Não foi possível carregar seus agendamentos',
+        variant: 'destructive',
+      });
+    }
+  };
+  
+  // Main useEffect to fetch data
   useEffect(() => {
     console.log("Dashboard useEffect running, currentUser:", currentUser?.name);
+    
+    if (!currentUser) {
+      return; // Early return inside useEffect is safe
+    }
     
     const fetchDashboardData = async () => {
       setLoading(true);
       try {
         console.log("Fetching dashboard data...");
         // Fetch statistics
-        const statsData = await api.getStats();
+        const statsData = await api.getStats(currentUser.id, currentUser.role);
         console.log("Stats data received:", statsData);
         setStats(statsData);
         
+        // Fetch locations
+        const locationsData = await api.getAllServiceLocations();
+        setLocations(locationsData);
+        
         // Fetch appointments based on user role
-        if (currentUser?.role === 'operator') {
-          console.log("Fetching operator appointments");
-          const appointments = await api.getAppointmentsByOperator(currentUser.id);
-          setRecentAppointments(appointments);
-        } else if (currentUser?.role === 'master') {
-          console.log("Fetching pending appointments for master");
-          // If master, fetch pending appointments that need assignment
-          const pendingAppointments = await api.getPendingAppointments();
-          setRecentAppointments(pendingAppointments.slice(0, 5)); // Show only first 5
-        } else if (currentUser?.role === 'user' && currentUser?.cpf) {
-          console.log("Fetching user appointments by CPF:", currentUser.cpf);
-          // For regular users, fetch their appointments by CPF
-          const userAppointments = await api.getAppointmentsByCPF(currentUser.cpf);
-          console.log("User appointments found:", userAppointments.length);
-          setRecentAppointments(userAppointments);
-        }
+        await fetchAppointmentsBasedOnRole();
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
         setError('Não foi possível carregar os dados do dashboard');
@@ -95,7 +229,25 @@ export default function Dashboard() {
     };
     
     fetchDashboardData();
-  }, [currentUser, toast]);
+  }, [currentUser]);
+  
+  // Apply filter when statusFilter changes
+  useEffect(() => {
+    if (allAppointments.length > 0) {
+      setFilteredAppointments(applyStatusFilter(allAppointments, statusFilter));
+    }
+  }, [statusFilter, allAppointments]);
+  
+  // Handle all conditional rendering after all hooks have been called
+  if (!currentUser) {
+    console.log("No current user found in Dashboard");
+    return (
+      <div className="p-8 text-center">
+        <h1 className="text-2xl font-bold">Aguarde um momento</h1>
+        <p className="mt-2">Carregando suas informações...</p>
+      </div>
+    );
+  }
   
   // Exibe um estado de carregamento
   if (loading) {
@@ -166,208 +318,184 @@ export default function Dashboard() {
   
   console.log("Dashboard rendering main content");
   
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return <Clock className="h-5 w-5 text-status-pending" />;
-      case 'waiting':
-      case 'assigned':
-      case 'in_service':
-        return <Clock className="h-5 w-5 text-status-waiting" />;
-      case 'completed':
-        return <CheckCircle className="h-5 w-5 text-status-completed" />;
-      case 'cancelled':
-        return <X className="h-5 w-5 text-status-cancelled" />;
-      default:
-        return <AlertCircle className="h-5 w-5 text-gray-400" />;
-    }
-  };
+  // Status filter component for all user roles
+  const StatusFilterComponent = () => (
+    <div className="mb-4 flex items-center">
+      <Filter className="mr-2 h-4 w-4 text-gray-500" />
+      <Select value={statusFilter} onValueChange={handleFilterChange}>
+        <SelectTrigger className="w-[180px]">
+          <SelectValue placeholder="Filtrar por status" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos</SelectItem>
+          <SelectItem value="pending">Pendentes</SelectItem>
+          <SelectItem value="waiting">Em Espera</SelectItem>
+          <SelectItem value="assigned">Atribuídos</SelectItem>
+          <SelectItem value="in_service">Em Atendimento</SelectItem>
+          <SelectItem value="completed">Concluídos</SelectItem>
+          <SelectItem value="cancelled">Cancelados</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  );
   
-  // Função para criar um novo agendamento
-  const handleNewAppointment = async (data: any) => {
-    try {
-      await api.createAppointment(data);
-      setIsNewAppointmentOpen(false);
-      toast({
-        title: 'Agendamento criado',
-        description: 'Agendamento criado com sucesso',
-      });
-      
-      // Recarregar os agendamentos do usuário
-      if (currentUser?.cpf) {
-        const userAppointments = await api.getAppointmentsByCPF(currentUser.cpf);
-        setRecentAppointments(userAppointments);
-      }
-    } catch (error: any) {
-      console.error('Error creating appointment:', error);
-      toast({
-        title: 'Erro ao criar agendamento',
-        description: error.message || 'Tente novamente',
-        variant: 'destructive'
-      });
-    }
-  };
-  
-  // Render dashboard for regular users
-  if (currentUser?.role === 'user') {
-    console.log("Rendering dashboard for regular user");
-    
-    // Status text and color mapping
-    const getStatusInfo = (status: string) => {
-      switch (status) {
-        case 'pending':
-          return { text: 'Pendente', color: 'text-amber-600 bg-amber-50' };
-        case 'waiting':
-          return { text: 'Em Espera', color: 'text-blue-600 bg-blue-50' };
-        case 'assigned':
-          return { text: 'Atribuído', color: 'text-purple-600 bg-purple-50' };
-        case 'in_service':
-          return { text: 'Em Atendimento', color: 'text-indigo-600 bg-indigo-50' };
-        case 'completed':
-          return { text: 'Concluído', color: 'text-green-600 bg-green-50' };
-        case 'cancelled':
-          return { text: 'Cancelado', color: 'text-red-600 bg-red-50' };
-        default:
-          return { text: 'Desconhecido', color: 'text-gray-600 bg-gray-50' };
-      }
-    };
-    
-    // Format date in Brazilian format
-    const formatDate = (dateString: string) => {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('pt-BR', { 
-        day: '2-digit',
-        month: '2-digit', 
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    };
-    
+  // Renderização para cada tipo de usuário
+  if (currentUser.role === 'user') {
     return (
-      <div className="p-8">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Bem-vindo, {currentUser?.name}</h1>
-            <p className="text-gray-600 mt-1">
-              Este é seu painel de controle do AgendaRJ
-            </p>
-          </div>
-          
-          <div className="mt-4 md:mt-0">
-            <Button
-              onClick={() => setIsNewAppointmentOpen(true)}
-            >
-              Novo Agendamento
-            </Button>
-          </div>
+      <div className="p-6 space-y-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold">Bem-vindo(a), {currentUser.name}</h1>
+          <Button
+            onClick={() => setIsCreateDialogOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <CalendarPlus size={20} />
+            Novo Agendamento
+          </Button>
         </div>
-        
-        {/* User's appointments summary */}
-        <Card className="mb-8">
+
+        <Card>
           <CardHeader>
-            <CardTitle>Seus Agendamentos</CardTitle>
+            <div className="flex justify-between items-center">
+              <CardTitle>Meus Agendamentos</CardTitle>
+              <Button 
+                variant="outline" 
+                onClick={() => navigate('/appointments')}
+              >
+                Ver Todos
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
-            {recentAppointments.length > 0 ? (
+            <StatusFilterComponent />
+            
+            {filteredAppointments.length > 0 ? (
               <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {recentAppointments.map((appointment) => (
-                    <AppointmentCard
-                      key={appointment.id}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {recentAppointments.map(appointment => (
+                    <AppointmentCard 
+                      key={appointment.id} 
                       appointment={appointment}
-                      location={appointment.locationId ? {
-                        id: appointment.locationId,
-                        name: 'Verificando...',
-                        city: '',
-                        state: '',
-                        zipCode: '',
-                        street: '',
-                        number: '',
-                        neighborhood: ''
-                      } : null}
-                      onEdit={() => window.location.href = `/appointments/details/${appointment.id}`}
-                      onDelete={() => {}}
-                      onRefresh={() => {}}
+                      location={locations.find(loc => loc.id === appointment.locationId)}
+                      showActions={false}
                     />
                   ))}
                 </div>
-                <div className="text-center mt-4">
-                  <Button variant="outline" onClick={() => window.location.href = '/appointments'}>
-                    Ver Todos os Agendamentos
-                  </Button>
-                </div>
+                
+                {filteredAppointments.length > 3 && (
+                  <div className="text-center mt-4">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => navigate('/appointments')}
+                    >
+                      Ver Todos ({filteredAppointments.length})
+                    </Button>
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="text-center py-8">
-                <div className="bg-primary/10 inline-flex p-4 rounded-full mb-4">
-                  <Calendar className="h-8 w-8 text-primary" />
-                </div>
-                <h3 className="text-xl font-semibold mb-2">Nenhum agendamento encontrado</h3>
-                <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                  Você ainda não possui agendamentos registrados. Clique no botão abaixo para criar seu primeiro agendamento.
+              <div className="text-center py-6">
+                <p className="text-gray-500">
+                  {statusFilter !== 'all' 
+                    ? `Nenhum agendamento ${getStatusLabel(statusFilter)} encontrado` 
+                    : 'Nenhum agendamento encontrado'}
                 </p>
                 <Button 
-                  onClick={() => setIsNewAppointmentOpen(true)}
-                  className="mx-auto"
+                  variant="outline" 
+                  className="mt-4"
+                  onClick={() => setIsCreateDialogOpen(true)}
                 >
-                  Fazer um Agendamento
+                  Criar Novo Agendamento
                 </Button>
               </div>
             )}
           </CardContent>
         </Card>
-        
-        {/* Quick links for regular users */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Acesso Rápido</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <Button
-                variant="outline"
-                className="h-24 flex flex-col justify-center border-dashed"
-                onClick={() => setIsNewAppointmentOpen(true)}
-              >
-                <Calendar className="h-6 w-6 mb-2" />
-                <span>Novo Agendamento</span>
-              </Button>
-              
-              <Button
-                variant="outline"
-                className="h-24 flex flex-col justify-center border-dashed"
-                onClick={() => window.location.href = '/profile'}
-              >
-                <User className="h-6 w-6 mb-2" />
-                <span>Meu Perfil</span>
-              </Button>
-              
-              <Button
-                variant="outline"
-                className="h-24 flex flex-col justify-center border-dashed"
-                onClick={() => window.location.href = '/help'}
-              >
-                <AlertCircle className="h-6 w-6 mb-2" />
-                <span>Ajuda</span>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-        
-        {/* New Appointment Dialog */}
-        <Dialog 
-          open={isNewAppointmentOpen} 
-          onOpenChange={setIsNewAppointmentOpen}
-        >
-          <DialogContent className="sm:max-w-[500px]">
+      
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Acesso Rápido</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4">
+                <Button 
+                  variant="outline" 
+                  className="h-auto py-4 flex flex-col items-center justify-center"
+                  onClick={() => setIsCreateDialogOpen(true)}
+                >
+                  <CalendarPlus className="h-10 w-10 mb-2" />
+                  <span>Novo Agendamento</span>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="h-auto py-4 flex flex-col items-center justify-center"
+                  onClick={() => navigate('/appointments')}
+                >
+                  <Calendar className="h-10 w-10 mb-2" />
+                  <span>Meus Agendamentos</span>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="h-auto py-4 flex flex-col items-center justify-center"
+                  onClick={() => navigate('/locations')}
+                >
+                  <MapPin className="h-10 w-10 mb-2" />
+                  <span>Locais de Atendimento</span>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="h-auto py-4 flex flex-col items-center justify-center"
+                  onClick={() => window.open('https://www.gov.br/pt-br/servicos', '_blank')}
+                >
+                  <ClipboardCheck className="h-10 w-10 mb-2" />
+                  <span>Serviços Gov.br</span>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle>Horários de Atendimento</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <Clock className="h-6 w-6 text-primary" />
+                  <div>
+                    <p className="font-medium">Segunda a Sexta</p>
+                    <p className="text-sm text-gray-500">08:00 - 17:00</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Clock className="h-6 w-6 text-primary" />
+                  <div>
+                    <p className="font-medium">Sábado</p>
+                    <p className="text-sm text-gray-500">09:00 - 12:00</p>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-500 mt-4">
+                  * Os horários podem variar de acordo com o local de atendimento. Consulte os detalhes específicos de cada unidade.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <DialogContent className="max-w-4xl">
             <DialogHeader>
               <DialogTitle>Novo Agendamento</DialogTitle>
             </DialogHeader>
             <AppointmentForm 
               onSubmit={handleNewAppointment}
-              onCancel={() => setIsNewAppointmentOpen(false)}
-              initialData={currentUser?.cpf ? { cpf: currentUser.cpf } : undefined}
+              onCancel={() => setIsCreateDialogOpen(false)}
+              initialData={{
+                cpf: currentUser.cpf,
+                name: currentUser.name,
+                whatsapp: currentUser.whatsapp || '',
+              }}
             />
           </DialogContent>
         </Dialog>
@@ -375,213 +503,165 @@ export default function Dashboard() {
     );
   }
 
+  // Helper function to get status label
+  function getStatusLabel(status: string): string {
+    switch (status) {
+      case 'pending': return 'pendentes';
+      case 'waiting': return 'em espera';
+      case 'assigned': return 'atribuídos';
+      case 'in_service': return 'em atendimento';
+      case 'completed': return 'concluídos';
+      case 'cancelled': return 'cancelados';
+      default: return '';
+    }
+  }
+
+  // Renderização para master e operator
   return (
-    <div className="p-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Bem-vindo, {currentUser?.name}</h1>
-          <p className="text-gray-600 mt-1">
-            Este é seu painel de controle do AgendaRJ
-          </p>
-        </div>
+    <div className="p-6 space-y-6">
+      <h1 className="text-2xl font-bold">Painel de Controle</h1>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              {currentUser.role === 'operator' ? 'Meus Agendamentos' : 'Agendamentos'}
+            </CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats?.totalAppointments || 0}</div>
+            <p className="text-xs text-muted-foreground">
+              {currentUser.role === 'operator' 
+                ? `${stats?.byStatus?.inProgress || 0} em andamento` 
+                : `${stats?.byStatus?.pending || 0} pendentes`}
+            </p>
+          </CardContent>
+        </Card>
         
-        <div className="mt-4 md:mt-0">
-          <Button
-            onClick={() => window.location.href = currentUser?.role === 'operator' ? '/appointments-management' : '/task-distribution'}
-          >
-            {currentUser?.role === 'operator' ? 'Ir para Atendimento' : 'Distribuir Tarefas'}
-          </Button>
-        </div>
-      </div>
-      
-      {/* Stats */}
-      {stats && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
+        {currentUser.role !== 'operator' && (
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Total de Agendamentos</CardTitle>
-              <Calendar className="h-4 w-4 text-gray-500" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Usuários
+              </CardTitle>
+              <User className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.totalAppointments}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Agendamentos no sistema
+              <div className="text-2xl font-bold">{Object.keys(stats?.byOperator || {}).length || 0}</div>
+              <p className="text-xs text-muted-foreground">
+                Operadores ativos
               </p>
             </CardContent>
           </Card>
+        )}
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              {currentUser.role === 'operator' ? 'Minha Taxa de Conclusão' : 'Taxa de Conclusão'}
+            </CardTitle>
+            <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {stats?.completionRate 
+                ? `${stats.completionRate}%` 
+                : stats?.byStatus?.completed && (stats?.byStatus?.completed + stats?.byStatus?.inProgress + stats?.byStatus?.pending) > 0 
+                  ? `${Math.round((stats.byStatus.completed / (stats.byStatus.completed + stats.byStatus.inProgress + stats.byStatus.pending)) * 100)}%` 
+                  : '0%'}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Dos agendamentos marcados
+            </p>
+          </CardContent>
+        </Card>
           
+        {currentUser.role !== 'operator' && (
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Pendentes</CardTitle>
-              <AlertCircle className="h-4 w-4 text-status-pending" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Locais Ativos
+              </CardTitle>
+              <MapPin className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.byStatus.pending}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Aguardando atribuição
+              <div className="text-2xl font-bold">{Object.keys(stats?.byCity || {}).length || 0}</div>
+              <p className="text-xs text-muted-foreground">
+                Em todo o estado
               </p>
             </CardContent>
           </Card>
+        )}
           
+        {currentUser.role === 'operator' && (
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Em Andamento</CardTitle>
-              <Clock className="h-4 w-4 text-status-waiting" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Agendamentos Completos
+              </CardTitle>
+              <CheckCircle className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.byStatus.inProgress}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Em atendimento ou atribuídos
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Concluídos</CardTitle>
-              <CheckCircle className="h-4 w-4 text-status-completed" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.byStatus.completed}</div>
-              <p className="text-xs text-muted-foreground mt-1">
+              <div className="text-2xl font-bold">{stats?.byStatus?.completed || 0}</div>
+              <p className="text-xs text-muted-foreground">
                 Atendimentos finalizados
               </p>
             </CardContent>
           </Card>
-        </div>
-      )}
+        )}
+      </div>
       
-      {/* Message for new users */}
-      {stats && stats.totalAppointments === 0 && (
-        <Card className="mb-8">
-          <CardContent className="pt-6">
-            <div className="text-center p-6">
-              <div className="bg-primary/10 inline-flex p-3 rounded-full mb-4">
-                <Calendar className="h-6 w-6 text-primary" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">Bem-vindo ao AgendaRJ!</h3>
-              <p className="text-gray-600 mb-4">
-                Você ainda não possui agendamentos no sistema. Comece criando seu primeiro agendamento
-                ou aguarde que os usuários realizem novos agendamentos.
-              </p>
-              {currentUser?.role === 'master' && (
-                <Button 
-                  onClick={() => window.location.href = '/service-locations'}
-                  className="mx-auto"
-                >
-                  Configurar Postos de Atendimento
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-      
-      {/* Recent tasks for operators or pending tasks for master */}
-      {recentAppointments.length > 0 && (
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>
-              {currentUser?.role === 'operator' ? 'Seus agendamentos recentes' : 'Agendamentos pendentes'}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {recentAppointments.map((appointment) => (
-                <div
-                  key={appointment.id}
-                  className="flex items-center justify-between p-3 rounded-md border"
-                >
-                  <div className="flex items-center">
-                    {getStatusIcon(appointment.status)}
-                    <div className="ml-3">
-                      <p className="font-medium">{appointment.name}</p>
-                      <p className="text-sm text-gray-600">
-                        {new Date(appointment.createdAt).toLocaleDateString('pt-BR')}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <Button
-                    size="sm"
-                    onClick={() => window.location.href = currentUser?.role === 'operator' ? '/appointments-management' : '/task-distribution'}
-                  >
-                    {currentUser?.role === 'operator' ? 'Atender' : 'Atribuir'}
-                  </Button>
-                </div>
-              ))}
-            </div>
-            
-            <div className="mt-4 text-center">
-              <Button
-                variant="outline"
-                onClick={() => window.location.href = currentUser?.role === 'operator' ? '/appointments-management' : '/task-distribution'}
-              >
-                Ver todos
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-      
-      {/* Quick links */}
       <Card>
         <CardHeader>
-          <CardTitle>Acesso Rápido</CardTitle>
+          <div className="flex justify-between items-center">
+            <CardTitle>
+              {currentUser.role === 'operator' ? 'Meus Agendamentos' : 'Agendamentos'}
+            </CardTitle>
+            <Button
+              variant="outline" 
+              onClick={() => navigate('/appointments')}
+            >
+              Ver Todos
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {currentUser?.role === 'operator' && (
-              <Button
-                variant="outline"
-                className="h-24 flex flex-col justify-center border-dashed"
-                onClick={() => window.location.href = '/appointments-management'}
-              >
-                <User className="h-6 w-6 mb-2" />
-                <span>Atendimentos</span>
-              </Button>
-            )}
-            
-            {currentUser?.role === 'master' && (
-              <>
-                <Button
-                  variant="outline"
-                  className="h-24 flex flex-col justify-center border-dashed"
-                  onClick={() => window.location.href = '/task-distribution'}
-                >
-                  <Clock className="h-6 w-6 mb-2" />
-                  <span>Distribuição de Tarefas</span>
-                </Button>
-                
-                <Button
-                  variant="outline"
-                  className="h-24 flex flex-col justify-center border-dashed"
-                  onClick={() => window.location.href = '/service-locations'}
-                >
-                  <Calendar className="h-6 w-6 mb-2" />
-                  <span>Postos de Atendimento</span>
-                </Button>
-                
-                <Button
-                  variant="outline"
-                  className="h-24 flex flex-col justify-center border-dashed"
-                  onClick={() => window.location.href = '/statistics'}
-                >
-                  <AlertCircle className="h-6 w-6 mb-2" />
-                  <span>Estatísticas</span>
-                </Button>
-                
-                <Button
-                  variant="outline"
-                  className="h-24 flex flex-col justify-center border-dashed"
-                  onClick={() => window.location.href = '/users'}
-                >
-                  <User className="h-6 w-6 mb-2" />
-                  <span>Usuários</span>
-                </Button>
-              </>
-            )}
-          </div>
+          <StatusFilterComponent />
+          
+          {filteredAppointments.length > 0 ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {recentAppointments.map(appointment => (
+                  <AppointmentCard 
+                    key={appointment.id} 
+                    appointment={appointment}
+                    location={locations.find(loc => loc.id === appointment.locationId)}
+                    showActions={false}
+                  />
+                ))}
+              </div>
+              
+              {filteredAppointments.length > 3 && (
+                <div className="text-center mt-4">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => navigate('/appointments')}
+                  >
+                    Ver Todos ({filteredAppointments.length})
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-6">
+              <p className="text-gray-500">
+                {statusFilter !== 'all' 
+                  ? `Nenhum agendamento ${getStatusLabel(statusFilter)} encontrado` 
+                  : 'Nenhum agendamento encontrado'}
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

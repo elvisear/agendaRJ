@@ -1,0 +1,5 @@
+Corre‡Æo AppointmentManagement.tsx:   
+"Remover o bloco duplicado de loading e substituir por:"  
+"-------------------"  
+"  };  // fim do handleAssignOperator"  
+"  return (" 

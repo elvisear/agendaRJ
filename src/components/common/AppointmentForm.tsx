@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { format, parse, isValid } from 'date-fns';
-import { Calendar, User, Phone } from 'lucide-react';
+import { Calendar, User, Phone, AlertTriangle } from 'lucide-react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -28,15 +28,17 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { DialogFooter } from '@/components/ui/dialog';
-import { formatCPF, formatPhone, phoneToInternational, calculateAge, formatDate } from '@/utils/formatters';
+import { toast } from '@/components/ui/sonner';
+import { formatCPF, formatPhone, phoneToInternational, calculateAge, formatDate, validateCPF } from '@/utils/formatters';
 import { api } from '@/services/api';
 import { Appointment, ServiceLocation } from '@/types';
 import { cn } from '@/lib/utils';
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const appointmentFormSchema = z.object({
-  cpf: z.string().min(11, {
-    message: 'CPF deve ter 11 dígitos',
-  }),
+  cpf: z.string()
+    .min(11, { message: 'CPF deve ter 11 dígitos' })
+    .refine((cpf) => validateCPF(cpf), { message: 'CPF inválido' }),
   name: z.string().min(3, {
     message: 'Nome completo é obrigatório',
   }),
@@ -50,7 +52,9 @@ const appointmentFormSchema = z.object({
   locationId: z.string({
     required_error: 'Local de atendimento é obrigatório',
   }),
-  guardianCpf: z.string().optional(),
+  guardianCpf: z.string()
+    .optional()
+    .refine((cpf) => !cpf || validateCPF(cpf), { message: 'CPF do responsável inválido' }),
 });
 
 type AppointmentFormValues = z.infer<typeof appointmentFormSchema>;
@@ -91,10 +95,32 @@ export default function AppointmentForm({
   useEffect(() => {
     const fetchLocations = async () => {
       try {
-        const locationsData = await api.getServiceLocations();
-        setLocations(locationsData);
+        // Buscar postos usando a API que já tem todas as permissões necessárias
+        console.log("AppointmentForm - Iniciando busca de postos via api.getAllServiceLocations()");
+        
+        try {
+          const supabaseLocations = await api.getAllServiceLocations();
+          
+          console.log(`AppointmentForm - Encontrados ${supabaseLocations.length} postos:`,
+             supabaseLocations.map(loc => ({ id: loc.id, name: loc.name })));
+          
+          // Usar os dados retornados pela API
+          setLocations(supabaseLocations);
+          
+          // Avisar quando não há postos cadastrados
+          if (supabaseLocations.length === 0) {
+            console.warn("Nenhum posto de atendimento cadastrado no banco de dados");
+            toast.error("Não há postos de atendimento disponíveis no momento");
+          }
+        } catch (apiError) {
+          console.error('Erro ao buscar postos via API:', apiError);
+          toast.error("Erro ao conectar com o serviço. Contate o administrador.");
+          setLocations([]);
+        }
       } catch (error) {
-        console.error('Error fetching locations:', error);
+        console.error('Erro grave ao buscar postos de atendimento:', error);
+        toast.error("Falha na comunicação com o servidor");
+        setLocations([]);
       }
     };
     
@@ -342,13 +368,27 @@ export default function AppointmentForm({
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {locations.map((location) => (
-                    <SelectItem key={location.id} value={location.id}>
-                      {location.name} - {location.city}
+                  {locations.length > 0 ? (
+                    locations.map((location) => (
+                      <SelectItem key={location.id} value={location.id}>
+                        {location.name} - {location.city}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-locations" disabled>
+                      Nenhum posto cadastrado
                     </SelectItem>
-                  ))}
+                  )}
                 </SelectContent>
               </Select>
+              {locations.length === 0 && (
+                <Alert variant="destructive" className="mt-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    Não há postos de atendimento cadastrados no banco. Contate o administrador.
+                  </AlertDescription>
+                </Alert>
+              )}
               <FormMessage />
             </FormItem>
           )}

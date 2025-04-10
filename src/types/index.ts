@@ -9,6 +9,7 @@ export interface User {
   birthDate: string;
   whatsapp: string;
   role: UserRole;
+  isActive: boolean;
 }
 
 export type AppointmentStatus = 'pending' | 'waiting' | 'in_service' | 'assigned' | 'completed' | 'cancelled';

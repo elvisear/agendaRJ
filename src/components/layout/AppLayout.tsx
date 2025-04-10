@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from '@/components/ui/sonner';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -24,6 +25,13 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, requiredRole = null }) 
   // Check authentication for all protected pages
   if (!isAuthenticated) {
     console.log("AppLayout redirecting to login - not authenticated");
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // Verificar se o usuário está ativo
+  if (currentUser?.isActive === false) {
+    console.log("AppLayout redirecting to login - user is inactive");
+    toast.error("Seu usuário está inativo no sistema! Por favor entre em contato com a administração do sistema.");
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

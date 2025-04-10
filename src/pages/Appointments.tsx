@@ -39,7 +39,7 @@ export default function Appointments() {
     // Fetch locations on component mount
     const fetchLocations = async () => {
       try {
-        const locationsData = await api.getServiceLocations();
+        const locationsData = await api.getAllServiceLocations();
         setLocations(locationsData);
       } catch (error) {
         console.error('Error fetching locations:', error);
@@ -155,7 +155,7 @@ export default function Appointments() {
     try {
       // Garantir que temos os locations antes de buscar os agendamentos
       if (locations.length === 0) {
-        const locationsData = await api.getServiceLocations();
+        const locationsData = await api.getAllServiceLocations();
         setLocations(locationsData);
       }
       
@@ -189,39 +189,49 @@ export default function Appointments() {
   };
   
   // Get location details for a specific appointment
-  const getLocationForAppointment = (appointment: Appointment): ServiceLocation | null => {
-    console.log("Appointments - Buscando local para appointment:", appointment.id, "com locationId:", appointment.locationId);
-    
-    // Estratégia 1: Buscar pelo ID exato
-    let location = locations.find(loc => loc.id === appointment.locationId);
-    if (location) {
-      console.log("Appointments - Local encontrado com ID exato:", location.name);
-      return location;
-    }
-    
-    // Estratégia 2: Buscar pelo ID sem formatação (apenas números)
-    if (appointment.locationId) {
-      const matches = appointment.locationId.match(/([0-9]+)$/);
-      if (matches && matches[1]) {
-        const numericId = matches[1].replace(/^0+/, ''); // Remover zeros à esquerda
-        console.log("Appointments - Extraindo ID numérico:", numericId);
-        
-        location = locations.find(loc => {
-          // Extrai o ID numérico do final do UUID do local
-          const locNumericId = loc.id.replace(/^.*-/, '').replace(/^0+/, '');
-          return locNumericId === numericId;
-        });
-        
-        if (location) {
-          console.log("Appointments - Local encontrado com ID numérico:", location.name);
-          return location;
+  const getLocationForAppointment = async (appointment: Appointment): Promise<ServiceLocation | null> => {
+    try {
+      console.log("Appointments - Buscando local para appointment:", appointment.id, "com locationId:", appointment.locationId);
+      
+      // Buscar diretamente do banco via API
+      const location = await api.getServiceLocation(appointment.locationId);
+      
+      if (location) {
+        console.log("Appointments - Local encontrado no banco:", location.name);
+        return location;
+      }
+      
+      console.log("Appointments - Local não encontrado no banco. Tentando alternativas.");
+      
+      // Se não encontrou, tentar buscar todos e encontrar uma correspondência
+      const allLocations = await api.getAllServiceLocations();
+      console.log("Appointments - Todos os locais do banco:", allLocations.map(l => l.id));
+      
+      // Verificar correspondência pelo ID numérico
+      if (appointment.locationId) {
+        const matches = appointment.locationId.match(/([0-9]+)$/);
+        if (matches && matches[1]) {
+          const numericId = matches[1].replace(/^0+/, ''); // Remover zeros à esquerda
+          console.log("Appointments - Extraindo ID numérico:", numericId);
+          
+          const matchingLocation = allLocations.find(loc => {
+            const locNumericId = loc.id.replace(/^.*-/, '').replace(/^0+/, '');
+            return locNumericId === numericId;
+          });
+          
+          if (matchingLocation) {
+            console.log("Appointments - Local encontrado com ID numérico:", matchingLocation.name);
+            return matchingLocation;
+          }
         }
       }
+      
+      console.log("Appointments - Nenhum local encontrado para locationId:", appointment.locationId);
+      return null;
+    } catch (error) {
+      console.error("Erro ao buscar local para agendamento:", error);
+      return null;
     }
-    
-    // Não usar fallback automático para evitar confusão
-    console.log("Appointments - Nenhum local encontrado para locationId:", appointment.locationId);
-    return null;
   };
   
   // Carregar os locais de agendamento quando necessário
@@ -238,7 +248,7 @@ export default function Appointments() {
         
         try {
           // Buscar todos os locais novamente para garantir que temos dados atualizados
-          const locationsData = await api.getServiceLocations();
+          const locationsData = await api.getAllServiceLocations();
           setLocations(locationsData);
         } catch (error) {
           console.error("Erro ao buscar locais:", error);
@@ -338,12 +348,12 @@ export default function Appointments() {
               </div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="mx-8 mt-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredAppointments.map((appointment) => (
-                <AppointmentCard
+                <AppointmentCard 
                   key={appointment.id}
                   appointment={appointment}
-                  location={getLocationForAppointment(appointment)}
+                  location={null}
                   onEdit={openEditDialog}
                   onDelete={handleDeleteAppointment}
                   onRefresh={refreshAppointments}
