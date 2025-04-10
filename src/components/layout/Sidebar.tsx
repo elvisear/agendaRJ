@@ -84,7 +84,7 @@ export default function Sidebar({ onCloseMobile }) {
   };
 
   return (
-    <div className="h-full bg-white shadow-sm flex-shrink-0 w-full flex flex-col">
+    <div className="h-full bg-white shadow-sm flex-shrink-0 w-[240px] flex flex-col">
       <div className="p-3 border-b flex items-center justify-between">
         <div className="flex items-center">
           <Calendar className="h-5 w-5 mr-1.5 text-primary" />

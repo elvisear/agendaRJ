@@ -77,14 +77,14 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, requiredRole = null }) 
         {/* Sidebar - redesenhada para ocupar menos espaço e ser mais usável */}
         <div className={`
           fixed inset-y-0 left-0 z-40 w-[240px] transform transition-transform duration-300 ease-in-out 
-          lg:translate-x-0 lg:static lg:h-screen
+          lg:translate-x-0 lg:static lg:w-64 lg:h-screen lg:flex-shrink-0
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         `}>
           <Sidebar onCloseMobile={() => setSidebarOpen(false)} />
         </div>
 
         {/* Main Content - ajustado para ter melhor padding em mobile */}
-        <main className="flex-1 overflow-auto pt-12 pb-6 px-3 lg:px-6 lg:pt-0">
+        <main className="flex-1 w-full max-w-full overflow-auto pt-12 pb-6 px-3 lg:px-6 lg:pt-0">
           {children}
         </main>
       </div>
@@ -138,14 +138,14 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, requiredRole = null }) 
       {/* Sidebar - redesenhada para ocupar menos espaço e ser mais usável */}
       <div className={`
         fixed inset-y-0 left-0 z-40 w-[240px] transform transition-transform duration-300 ease-in-out 
-        lg:translate-x-0 lg:static lg:h-screen
+        lg:translate-x-0 lg:static lg:w-64 lg:h-screen lg:flex-shrink-0
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <Sidebar onCloseMobile={() => setSidebarOpen(false)} />
       </div>
 
       {/* Main Content - ajustado para ter melhor padding em mobile */}
-      <main className="flex-1 overflow-auto pt-12 pb-6 px-3 lg:px-6 lg:pt-0">
+      <main className="flex-1 w-full max-w-full overflow-auto pt-12 pb-6 px-3 lg:px-6 lg:pt-0">
         {children}
       </main>
     </div>
