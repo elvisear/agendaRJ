@@ -77,7 +77,6 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 // Layout de público, que mostra apenas a página sem sidebar
 const PublicLayout = ({ children }: { children: ReactNode }) => (
   <div className="flex h-screen overflow-hidden">
-    <Sidebar />
     <main className="flex-1 overflow-auto bg-gray-50">
       {children}
     </main>
