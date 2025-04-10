@@ -3,7 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/components/ui/sonner';
-import { Menu } from 'lucide-react';
+import { Menu, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface AppLayoutProps {
@@ -48,20 +48,22 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, requiredRole = null }) 
     console.log("AppLayout rendering with sidebar - general access");
     return (
       <div className="flex h-screen overflow-hidden bg-gray-50">
-        {/* Mobile Sidebar Toggle */}
-        <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white p-3 flex items-center justify-between border-b shadow-sm">
+        {/* Mobile Header */}
+        <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white p-2.5 flex items-center justify-between border-b shadow-sm">
           <Button 
             variant="ghost" 
-            size="icon" 
+            size="sm"
             className="flex items-center justify-center"
             onClick={() => setSidebarOpen(!sidebarOpen)}
           >
-            <Menu className="h-5 w-5" />
+            <Menu className="h-4 w-4" />
+            <span className="ml-1.5 text-sm font-medium">Menu</span>
           </Button>
           <div className="flex items-center">
-            <h1 className="text-lg font-semibold text-primary">AgendaRJ</h1>
+            <Calendar className="h-4 w-4 mr-1 text-primary" />
+            <h1 className="text-base font-semibold text-primary">AgendaRJ</h1>
           </div>
-          <div className="w-8"></div> {/* Spacer para balancear o layout */}
+          <div className="w-16"></div> {/* Spacer para balancear o layout */}
         </div>
 
         {/* Mobile Sidebar Overlay */}
@@ -72,16 +74,17 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, requiredRole = null }) 
           />
         )}
 
-        {/* Sidebar - responsive */}
+        {/* Sidebar - redesenhada para ocupar menos espaço e ser mais usável */}
         <div className={`
-          fixed inset-y-0 left-0 z-40 w-64 max-w-[280px] transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:h-screen
+          fixed inset-y-0 left-0 z-40 w-[240px] transform transition-transform duration-300 ease-in-out 
+          lg:translate-x-0 lg:static lg:h-screen
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         `}>
           <Sidebar onCloseMobile={() => setSidebarOpen(false)} />
         </div>
 
-        {/* Main Content */}
-        <main className="flex-1 overflow-auto pt-14 lg:pt-0">
+        {/* Main Content - ajustado para ter melhor padding em mobile */}
+        <main className="flex-1 overflow-auto pt-12 pb-6 px-3 lg:px-6 lg:pt-0">
           {children}
         </main>
       </div>
@@ -106,20 +109,22 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, requiredRole = null }) 
   console.log("AppLayout rendering with sidebar - role access");
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
-      {/* Mobile Sidebar Toggle */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white p-3 flex items-center justify-between border-b shadow-sm">
+      {/* Mobile Header */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white p-2.5 flex items-center justify-between border-b shadow-sm">
         <Button 
           variant="ghost" 
-          size="icon" 
+          size="sm"
           className="flex items-center justify-center"
           onClick={() => setSidebarOpen(!sidebarOpen)}
         >
-          <Menu className="h-5 w-5" />
+          <Menu className="h-4 w-4" />
+          <span className="ml-1.5 text-sm font-medium">Menu</span>
         </Button>
         <div className="flex items-center">
-          <h1 className="text-lg font-semibold text-primary">AgendaRJ</h1>
+          <Calendar className="h-4 w-4 mr-1 text-primary" />
+          <h1 className="text-base font-semibold text-primary">AgendaRJ</h1>
         </div>
-        <div className="w-8"></div> {/* Spacer para balancear o layout */}
+        <div className="w-16"></div> {/* Spacer para balancear o layout */}
       </div>
 
       {/* Mobile Sidebar Overlay */}
@@ -130,16 +135,17 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, requiredRole = null }) 
         />
       )}
 
-      {/* Sidebar - responsive */}
+      {/* Sidebar - redesenhada para ocupar menos espaço e ser mais usável */}
       <div className={`
-        fixed inset-y-0 left-0 z-40 w-64 max-w-[280px] transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:h-screen
+        fixed inset-y-0 left-0 z-40 w-[240px] transform transition-transform duration-300 ease-in-out 
+        lg:translate-x-0 lg:static lg:h-screen
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <Sidebar onCloseMobile={() => setSidebarOpen(false)} />
       </div>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-auto pt-14 lg:pt-0">
+      {/* Main Content - ajustado para ter melhor padding em mobile */}
+      <main className="flex-1 overflow-auto pt-12 pb-6 px-3 lg:px-6 lg:pt-0">
         {children}
       </main>
     </div>

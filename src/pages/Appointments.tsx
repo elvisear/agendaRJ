@@ -261,47 +261,41 @@ export default function Appointments() {
   
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header com botão de voltar - versão mobile otimizada */}
-      <header className="bg-primary shadow-md py-3">
-        <div className="container mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-3">
-          <div className="flex w-full sm:w-auto justify-between items-center">
-            <button 
-              className="flex items-center text-white hover:text-gray-200"
-              onClick={() => navigate('/')}
-            >
-              <ChevronLeft className="h-5 w-5 mr-1" />
-              <span>Voltar</span>
-            </button>
-            <div className="flex items-center sm:hidden">
-              <Calendar className="text-white h-5 w-5 mr-2" />
-              <h1 className="text-white text-lg font-bold">Agendamentos</h1>
-            </div>
-          </div>
+      {/* Header minimalista para dispositivos móveis */}
+      <header className="bg-primary shadow-sm py-2">
+        <div className="container mx-auto px-3 flex items-center justify-between">
+          <button 
+            className="flex items-center text-white hover:text-gray-200"
+            onClick={() => navigate('/')}
+          >
+            <ChevronLeft className="h-4 w-4" />
+            <span className="text-sm ml-1">Voltar</span>
+          </button>
           
-          <div className="hidden sm:flex items-center">
-            <Calendar className="text-white h-6 w-6 mr-2" />
-            <h1 className="text-white text-2xl font-bold">Agendamentos</h1>
+          <div className="flex items-center">
+            <Calendar className="text-white h-4 w-4 mr-1" />
+            <h1 className="text-white text-base font-medium">Agendamentos</h1>
           </div>
           
           <Button 
             onClick={() => setIsNewAppointmentOpen(true)}
-            className="w-full sm:w-auto bg-white text-primary hover:bg-gray-100"
+            className="bg-white text-primary hover:bg-gray-100 h-7 px-2"
             size="sm"
           >
-            Novo Agendamento
+            <span className="text-xs">Novo</span>
           </Button>
         </div>
       </header>
       
-      {/* Main content */}
-      <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-8">
-        {/* Search section */}
-        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-6">
-          <h2 className="text-lg sm:text-xl font-semibold mb-4">Buscar agendamentos</h2>
+      {/* Main content com padding reduzido */}
+      <main className="px-3 py-3">
+        {/* Search section simplificada */}
+        <div className="bg-white rounded-lg shadow-sm p-3 mb-4">
+          <h2 className="text-sm font-medium mb-2">Buscar agendamentos</h2>
           
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+          <div className="flex flex-col gap-2">
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">
                 CPF
               </label>
               <div className="relative">
@@ -309,55 +303,54 @@ export default function Appointments() {
                   placeholder="Digite seu CPF"
                   value={cpf}
                   onChange={handleCpfChange}
-                  className="pl-10"
+                  className="pl-8 h-8 text-sm"
                 />
-                <Search className="h-4 w-4 text-gray-500 absolute left-3 top-3" />
+                <Search className="h-3.5 w-3.5 text-gray-500 absolute left-2.5 top-2" />
               </div>
             </div>
             
-            <div className="sm:self-end">
-              <Button 
-                onClick={handleSearch}
-                className="w-full sm:w-auto"
-                disabled={loading}
-              >
-                {loading ? 'Buscando...' : 'Buscar'}
-              </Button>
-            </div>
+            <Button 
+              onClick={handleSearch}
+              className="w-full h-8"
+              size="sm"
+              disabled={loading}
+            >
+              {loading ? 'Buscando...' : 'Buscar'}
+            </Button>
           </div>
         </div>
         
         {/* Results section */}
         {appointments.length > 0 && (
-          <div className="mb-6">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
-              <h2 className="text-lg sm:text-xl font-semibold">
+          <div className="mb-4">
+            <div className="flex justify-between items-center mb-2">
+              <h2 className="text-sm font-medium">
                 Seus agendamentos ({appointments.length})
               </h2>
               
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <Filter className="h-4 w-4 text-gray-500" />
+              <div className="flex items-center">
+                <Filter className="h-3.5 w-3.5 text-gray-500 mr-1" />
                 <Select
                   value={filter}
                   onValueChange={(value) => setFilter(value as AppointmentStatus | 'all')}
                 >
-                  <SelectTrigger className="w-full sm:w-[180px]">
-                    <SelectValue placeholder="Filtrar por status" />
+                  <SelectTrigger className="h-8 text-xs px-2.5 min-w-[120px]">
+                    <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Todos os status</SelectItem>
+                    <SelectItem value="all">Todos</SelectItem>
                     <SelectItem value="pending">Em atribuição</SelectItem>
                     <SelectItem value="waiting">Em Atendimento</SelectItem>
                     <SelectItem value="in_service">Em Serviço</SelectItem>
                     <SelectItem value="assigned">Atribuído</SelectItem>
-                    <SelectItem value="completed">Atendimento Realizado</SelectItem>
+                    <SelectItem value="completed">Realizado</SelectItem>
                     <SelectItem value="cancelled">Cancelado</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4 px-0 sm:px-6">
+            <div className="grid grid-cols-1 gap-3">
               {filteredAppointments.map((appointment) => (
                 <AppointmentCard 
                   key={appointment.id}
@@ -373,22 +366,30 @@ export default function Appointments() {
         )}
         
         {appointments.length === 0 && cpf && !loading && (
-          <div className="text-center p-4 sm:p-8 bg-white rounded-lg shadow">
-            <Clock className="h-10 w-10 sm:h-12 sm:w-12 mx-auto text-gray-400 mb-3" />
-            <p className="text-lg sm:text-xl font-medium text-gray-600">Nenhum agendamento encontrado</p>
-            <p className="text-gray-500 mb-4">Crie um novo agendamento para começar</p>
-            <Button onClick={() => setIsNewAppointmentOpen(true)}>
+          <div className="text-center p-4 bg-white rounded-lg shadow-sm">
+            <Clock className="h-8 w-8 mx-auto text-gray-400 mb-2" />
+            <p className="text-sm font-medium text-gray-600">Nenhum agendamento encontrado</p>
+            <p className="text-xs text-gray-500 mb-3">Crie um novo agendamento para começar</p>
+            <Button 
+              onClick={() => setIsNewAppointmentOpen(true)}
+              size="sm"
+              className="h-8"
+            >
               Criar Agendamento
             </Button>
           </div>
         )}
         
         {!cpf && (
-          <div className="text-center p-4 sm:p-8 bg-white rounded-lg shadow">
-            <Search className="h-10 w-10 sm:h-12 sm:w-12 mx-auto text-gray-400 mb-3" />
-            <p className="text-lg sm:text-xl font-medium text-gray-600">Digite seu CPF para ver seus agendamentos</p>
-            <p className="text-gray-500 mb-4">Ou crie um novo agendamento agora</p>
-            <Button onClick={() => setIsNewAppointmentOpen(true)}>
+          <div className="text-center p-4 bg-white rounded-lg shadow-sm">
+            <Search className="h-8 w-8 mx-auto text-gray-400 mb-2" />
+            <p className="text-sm font-medium text-gray-600">Digite seu CPF para ver seus agendamentos</p>
+            <p className="text-xs text-gray-500 mb-3">Ou crie um novo agendamento agora</p>
+            <Button 
+              onClick={() => setIsNewAppointmentOpen(true)}
+              size="sm"
+              className="h-8"
+            >
               Criar Agendamento
             </Button>
           </div>
@@ -400,9 +401,9 @@ export default function Appointments() {
         open={isNewAppointmentOpen} 
         onOpenChange={setIsNewAppointmentOpen}
       >
-        <DialogContent className="w-[95vw] max-w-[500px] rounded-lg">
-          <DialogHeader>
-            <DialogTitle>Novo Agendamento</DialogTitle>
+        <DialogContent className="w-[95vw] max-w-[450px] p-4 rounded-lg">
+          <DialogHeader className="pb-2">
+            <DialogTitle className="text-base">Novo Agendamento</DialogTitle>
           </DialogHeader>
           <AppointmentForm 
             onSubmit={handleNewAppointment}
@@ -417,9 +418,9 @@ export default function Appointments() {
         open={isEditAppointmentOpen} 
         onOpenChange={setIsEditAppointmentOpen}
       >
-        <DialogContent className="w-[95vw] max-w-[500px] rounded-lg">
-          <DialogHeader>
-            <DialogTitle>Editar Agendamento</DialogTitle>
+        <DialogContent className="w-[95vw] max-w-[450px] p-4 rounded-lg">
+          <DialogHeader className="pb-2">
+            <DialogTitle className="text-base">Editar Agendamento</DialogTitle>
           </DialogHeader>
           {currentAppointment && (
             <AppointmentForm 
