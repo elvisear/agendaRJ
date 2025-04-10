@@ -49,7 +49,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, requiredRole = null }) 
     return (
       <div className="flex h-screen overflow-hidden bg-gray-50">
         {/* Mobile Sidebar Toggle */}
-        <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-white p-3 flex items-center justify-between border-b shadow-sm">
+        <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white p-3 flex items-center justify-between border-b shadow-sm">
           <Button 
             variant="ghost" 
             size="icon" 
@@ -67,14 +67,14 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, requiredRole = null }) 
         {/* Mobile Sidebar Overlay */}
         {sidebarOpen && (
           <div 
-            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+            className="fixed inset-0 bg-black/50 z-30 lg:hidden"
             onClick={() => setSidebarOpen(false)}
           />
         )}
 
         {/* Sidebar - responsive */}
         <div className={`
-          fixed inset-y-0 left-0 z-50 w-[85%] max-w-[260px] transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:h-screen
+          fixed inset-y-0 left-0 z-40 w-64 max-w-[280px] transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:h-screen
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         `}>
           <Sidebar onCloseMobile={() => setSidebarOpen(false)} />
@@ -107,7 +107,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, requiredRole = null }) 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
       {/* Mobile Sidebar Toggle */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-white p-3 flex items-center justify-between border-b shadow-sm">
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white p-3 flex items-center justify-between border-b shadow-sm">
         <Button 
           variant="ghost" 
           size="icon" 
@@ -125,14 +125,14 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, requiredRole = null }) 
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar - responsive */}
       <div className={`
-        fixed inset-y-0 left-0 z-50 w-[85%] max-w-[260px] transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:h-screen
+        fixed inset-y-0 left-0 z-40 w-64 max-w-[280px] transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:h-screen
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <Sidebar onCloseMobile={() => setSidebarOpen(false)} />
