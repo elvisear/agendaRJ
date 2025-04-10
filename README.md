@@ -1,73 +1,62 @@
-# Welcome to your Lovable project
+# AgendaRJ
 
-## Project info
+Um sistema de agendamento de serviços desenvolvido para a cidade do Rio de Janeiro.
 
-**URL**: https://lovable.dev/projects/cb647fd3-f445-4414-8a33-b9a9f2a73df8
+## Funcionalidades
 
-## How can I edit this code?
+- Autenticação e gerenciamento de usuários
+- Agendamento de serviços
+- Gestão de filas de atendimento
+- Interface administrativa para operadores
+- Diferentes níveis de acesso (usuário, operador, master)
 
-There are several ways of editing your application.
+## Tecnologias
 
-**Use Lovable**
+- React
+- TypeScript
+- Supabase para autenticação e banco de dados
+- React Router para navegação
+- Shadcn UI para componentes de interface
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/cb647fd3-f445-4414-8a33-b9a9f2a73df8) and start prompting.
+## Instalação
 
-Changes made via Lovable will be committed automatically to this repo.
+1. Clone o repositório
+```bash
+git clone https://github.com/seu-usuario/agendrj.git
+cd agendrj
+```
 
-**Use your preferred IDE**
+2. Instale as dependências
+```bash
+npm install
+```
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+3. Configure as variáveis de ambiente
+Crie um arquivo `.env.local` na raiz do projeto com as variáveis do Supabase:
+```
+VITE_SUPABASE_URL=sua_url_do_supabase
+VITE_SUPABASE_ANON_KEY=sua_chave_anonima
+VITE_SUPABASE_SERVICE_ROLE_KEY=sua_chave_de_servico
+```
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+4. Inicie o servidor de desenvolvimento
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+## Estrutura do Banco de Dados
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Tabela users
+- id: string (PK)
+- name: string
+- email: string
+- password: string
+- cpf: string
+- whatsapp: string
+- role: string ('user', 'operator', 'master')
+- is_active: boolean
+- birthdate: string (formato ISO)
 
-**Use GitHub Codespaces**
+## Licença
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/cb647fd3-f445-4414-8a33-b9a9f2a73df8) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes it is!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+MIT

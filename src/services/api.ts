@@ -29,7 +29,7 @@ interface DbUser {
   whatsapp: string;
   role: string;
   is_active?: boolean; // No banco o nome da coluna é is_active
-  birthdate?: string; // Campo adicionado para corresponder à coluna no banco de dados
+  birthdate?: string; // O banco exige esta coluna (not-null constraint)
 }
 
 // Função para converter um User da aplicação para o formato do banco
@@ -59,7 +59,7 @@ function toDbUser(user: Omit<User, 'id'> | User): Omit<DbUser, 'id'> | DbUser {
       whatsapp,
       role,
       is_active: isActive, // Mapear isActive para is_active
-      birthdate: birthDate // Mapear birthDate para birthdate
+      birthdate: birthDate // Usar birthDate do usuário original se disponível
     };
   }
   
@@ -72,7 +72,7 @@ function toDbUser(user: Omit<User, 'id'> | User): Omit<DbUser, 'id'> | DbUser {
     whatsapp,
     role,
     is_active: isActive, // Mapear isActive para is_active
-    birthdate: birthDate // Mapear birthDate para birthdate
+    birthdate: birthDate // Usar birthDate do usuário original se disponível
   };
 }
 
@@ -89,7 +89,7 @@ function fromDbUser(dbUser: DbUser, originalUser?: Partial<User>): User {
     email: email || '',
     password: password || '',
     cpf: cpf || '',
-    birthDate: birthdate || '', // Mapear birthdate do banco para birthDate no app
+    birthDate: birthdate || originalUser?.birthDate || '', // Priorizar o valor do banco
     whatsapp: whatsapp || '',
     role: role as UserRole || 'user',
     isActive,
@@ -372,7 +372,7 @@ export const api = {
     
       // Verificar se o email já existe
       const existingUser = users.find((u) => u.email === userData.email);
-      if (existingUser) {
+    if (existingUser) {
         throw new Error('Este email já está em uso');
       }
 
@@ -412,7 +412,7 @@ export const api = {
         whatsapp: userData.whatsapp || '',
         role: userData.role || 'user',
         is_active: true, // Todo novo usuário começa como ativo
-        birthdate: userData.birthDate || '' // Adicionando a data de nascimento
+        birthdate: userData.birthDate // Usar birthDate do usuário original se disponível
       };
 
       console.log('Inserindo dados do usuário na tabela public.users:', userToInsert);
@@ -434,7 +434,7 @@ export const api = {
       }
 
       // Criar o usuário localmente (com os dados do banco ou nossos dados originais)
-      const newUser: User = {
+    const newUser: User = {
         id: userId,
         name: userData.name,
         email: userData.email,
@@ -449,7 +449,7 @@ export const api = {
       users.push(newUser);
       console.log('Usuário criado com sucesso:', newUser.name);
 
-      return newUser;
+    return newUser;
     } catch (error) {
       console.error('Erro ao registrar usuário:', error);
       throw error;
@@ -537,7 +537,7 @@ export const api = {
             email: dbUser.email || '',
             password: localUser?.password || '******',
             cpf: dbUser.cpf || '',
-            birthDate: dbUser.birthdate || '', // Mapear birthdate do banco para birthDate no app
+            birthDate: dbUser.birthdate || localUser?.birthDate || '', // Usar valor do banco ou da memória
             whatsapp: dbUser.whatsapp || '',
             role: dbUser.role as UserRole,
             isActive: dbUser.is_active !== false // Importante: considerar undefined ou null como true
@@ -1758,7 +1758,7 @@ export const api = {
       try {
         // Buscar todos os operadores do Supabase - em bloco try/catch separado para continuar mesmo se falhar
         console.log("Tentando buscar operadores do Supabase...");
-        const { data: operatorsData, error: usersError } = await supabase
+        const { data: operatorsData, error: usersError } = await supabaseAdmin
           .from('users')
           .select('*')
           .eq('role', 'operator');
