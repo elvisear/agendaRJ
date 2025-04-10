@@ -20,21 +20,21 @@ const SidebarLink: React.FC<SidebarLinkProps> = ({ to, label, icon, isActive }) 
     <li>
       <button
         className={cn(
-          "flex items-center gap-3 px-4 py-3 w-full rounded-lg transition-colors",
+          "flex items-center gap-3 px-4 py-3.5 w-full rounded-lg transition-colors",
           isActive 
             ? "bg-primary text-primary-foreground" 
             : "hover:bg-primary-light/20 text-gray-700"
         )}
         onClick={() => navigate(to)}
       >
-        <span className="w-5 h-5">{icon}</span>
+        <span className="w-5 h-5 flex-shrink-0">{icon}</span>
         <span className="text-sm font-medium">{label}</span>
       </button>
     </li>
   );
 };
 
-export default function Sidebar() {
+export default function Sidebar({ onCloseMobile }) {
   const { pathname } = useLocation();
   const { userRole, logout, currentUser, isAuthenticated } = useAuth();
   const navigate = useNavigate();
@@ -78,16 +78,34 @@ export default function Sidebar() {
     navigate('/');
   };
 
+  const handleNavigate = (to) => {
+    navigate(to);
+    if (onCloseMobile) onCloseMobile();
+  };
+
   return (
-    <div className="h-full bg-white border-r shadow-sm flex-shrink-0 w-64 flex flex-col">
-      <div className="p-5 border-b">
+    <div className="h-full bg-white border-r shadow-sm flex-shrink-0 w-full flex flex-col">
+      <div className="p-4 border-b flex items-center justify-between">
         <div className="flex items-center">
-          <Calendar className="h-6 w-6 mr-2 text-primary" />
-          <h2 className="text-xl font-semibold text-primary">AgendaRJ</h2>
+          <Calendar className="h-5 w-5 mr-2 text-primary" />
+          <h2 className="text-lg font-semibold text-primary">AgendaRJ</h2>
         </div>
+        {onCloseMobile && (
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="lg:hidden" 
+            onClick={onCloseMobile}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </Button>
+        )}
       </div>
       
-      <nav className="flex-1 p-4">
+      <nav className="flex-1 p-3 overflow-y-auto">
         <ul className="space-y-1">
           {availableRoutes.map((route) => (
             <SidebarLink
@@ -102,12 +120,12 @@ export default function Sidebar() {
       </nav>
       
       {isAuthenticated && (
-        <div className="p-4 border-t">
+        <div className="p-3 border-t">
           <button
-            className="flex items-center gap-3 px-4 py-3 w-full rounded-lg text-gray-700 hover:bg-red-100 transition-colors"
+            className="flex items-center gap-3 px-4 py-3.5 w-full rounded-lg text-gray-700 hover:bg-red-100 transition-colors"
             onClick={handleLogout}
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut className="w-5 h-5 flex-shrink-0" />
             <span className="text-sm font-medium">Sair</span>
           </button>
         </div>

@@ -261,23 +261,32 @@ export default function Appointments() {
   
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header with back to home */}
-      <header className="bg-primary shadow-md py-4">
-        <div className="container mx-auto px-4 flex justify-between items-center">
-          <button 
-            className="flex items-center text-white hover:text-gray-200"
-            onClick={() => navigate('/')}
-          >
-            <ChevronLeft className="h-5 w-5 mr-1" />
-            <span>Voltar</span>
-          </button>
-          <div className="flex items-center">
+      {/* Header com botão de voltar - versão mobile otimizada */}
+      <header className="bg-primary shadow-md py-3">
+        <div className="container mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-3">
+          <div className="flex w-full sm:w-auto justify-between items-center">
+            <button 
+              className="flex items-center text-white hover:text-gray-200"
+              onClick={() => navigate('/')}
+            >
+              <ChevronLeft className="h-5 w-5 mr-1" />
+              <span>Voltar</span>
+            </button>
+            <div className="flex items-center sm:hidden">
+              <Calendar className="text-white h-5 w-5 mr-2" />
+              <h1 className="text-white text-lg font-bold">Agendamentos</h1>
+            </div>
+          </div>
+          
+          <div className="hidden sm:flex items-center">
             <Calendar className="text-white h-6 w-6 mr-2" />
             <h1 className="text-white text-2xl font-bold">Agendamentos</h1>
           </div>
+          
           <Button 
             onClick={() => setIsNewAppointmentOpen(true)}
-            className="bg-white text-primary hover:bg-gray-100"
+            className="w-full sm:w-auto bg-white text-primary hover:bg-gray-100"
+            size="sm"
           >
             Novo Agendamento
           </Button>
@@ -285,10 +294,10 @@ export default function Appointments() {
       </header>
       
       {/* Main content */}
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-8">
         {/* Search section */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          <h2 className="text-xl font-semibold mb-4">Buscar agendamentos</h2>
+        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-6">
+          <h2 className="text-lg sm:text-xl font-semibold mb-4">Buscar agendamentos</h2>
           
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
@@ -321,18 +330,18 @@ export default function Appointments() {
         {/* Results section */}
         {appointments.length > 0 && (
           <div className="mb-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+              <h2 className="text-lg sm:text-xl font-semibold">
                 Seus agendamentos ({appointments.length})
               </h2>
               
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
                 <Filter className="h-4 w-4 text-gray-500" />
                 <Select
                   value={filter}
                   onValueChange={(value) => setFilter(value as AppointmentStatus | 'all')}
                 >
-                  <SelectTrigger className="w-[180px]">
+                  <SelectTrigger className="w-full sm:w-[180px]">
                     <SelectValue placeholder="Filtrar por status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -348,7 +357,7 @@ export default function Appointments() {
               </div>
             </div>
             
-            <div className="mx-8 mt-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4 px-0 sm:px-6">
               {filteredAppointments.map((appointment) => (
                 <AppointmentCard 
                   key={appointment.id}
@@ -364,9 +373,9 @@ export default function Appointments() {
         )}
         
         {appointments.length === 0 && cpf && !loading && (
-          <div className="text-center p-8 bg-white rounded-lg shadow">
-            <Clock className="h-12 w-12 mx-auto text-gray-400 mb-3" />
-            <p className="text-xl font-medium text-gray-600">Nenhum agendamento encontrado</p>
+          <div className="text-center p-4 sm:p-8 bg-white rounded-lg shadow">
+            <Clock className="h-10 w-10 sm:h-12 sm:w-12 mx-auto text-gray-400 mb-3" />
+            <p className="text-lg sm:text-xl font-medium text-gray-600">Nenhum agendamento encontrado</p>
             <p className="text-gray-500 mb-4">Crie um novo agendamento para começar</p>
             <Button onClick={() => setIsNewAppointmentOpen(true)}>
               Criar Agendamento
@@ -375,9 +384,9 @@ export default function Appointments() {
         )}
         
         {!cpf && (
-          <div className="text-center p-8 bg-white rounded-lg shadow">
-            <Search className="h-12 w-12 mx-auto text-gray-400 mb-3" />
-            <p className="text-xl font-medium text-gray-600">Digite seu CPF para ver seus agendamentos</p>
+          <div className="text-center p-4 sm:p-8 bg-white rounded-lg shadow">
+            <Search className="h-10 w-10 sm:h-12 sm:w-12 mx-auto text-gray-400 mb-3" />
+            <p className="text-lg sm:text-xl font-medium text-gray-600">Digite seu CPF para ver seus agendamentos</p>
             <p className="text-gray-500 mb-4">Ou crie um novo agendamento agora</p>
             <Button onClick={() => setIsNewAppointmentOpen(true)}>
               Criar Agendamento
@@ -391,7 +400,7 @@ export default function Appointments() {
         open={isNewAppointmentOpen} 
         onOpenChange={setIsNewAppointmentOpen}
       >
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="w-[95vw] max-w-[500px] rounded-lg">
           <DialogHeader>
             <DialogTitle>Novo Agendamento</DialogTitle>
           </DialogHeader>
@@ -408,7 +417,7 @@ export default function Appointments() {
         open={isEditAppointmentOpen} 
         onOpenChange={setIsEditAppointmentOpen}
       >
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="w-[95vw] max-w-[500px] rounded-lg">
           <DialogHeader>
             <DialogTitle>Editar Agendamento</DialogTitle>
           </DialogHeader>
