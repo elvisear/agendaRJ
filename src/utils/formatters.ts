@@ -147,3 +147,18 @@ export function validateCPF(cpf: string): boolean {
   
   return parseInt(cleanCpf.charAt(10)) === digit2;
 }
+
+/**
+ * Format datetime to local BR format (DD/MM/YYYY HH:mm)
+ */
+export function formatDateTime(date: string | Date): string {
+  if (!date) return '';
+  
+  try {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    return format(dateObj, 'dd/MM/yyyy HH:mm', { locale: ptBR });
+  } catch (error) {
+    console.error('Error formatting datetime:', error);
+    return '';
+  }
+}
