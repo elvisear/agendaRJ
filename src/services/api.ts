@@ -29,28 +29,41 @@ interface DbUser {
   whatsapp: string;
   role: string;
   is_active?: boolean; // No banco o nome da coluna é is_active
+  birthdate?: string; // Campo adicionado para corresponder à coluna no banco de dados
 }
 
 // Função para converter um User da aplicação para o formato do banco
 function toDbUser(user: Omit<User, 'id'> | User): Omit<DbUser, 'id'> | DbUser {
-  // Desestruturar para extrair apenas os campos que existem no banco
-  const { name, email, password, cpf, whatsapp, role, isActive, ...rest } = user;
+  const { 
+    name, 
+    email, 
+    password, 
+    cpf, 
+    whatsapp, 
+    role, 
+    isActive, 
+    birthDate, 
+    ...rest
+  } = user;
   
-  // Se o user tem id, incluí-lo no objeto retornado
-  if ('id' in rest) {
+  // Se o usuário tem ID, é um usuário existente sendo atualizado
+  if ('id' in user) {
+    const { id } = user as User;
+    
     return {
-      id: rest.id,
+      id,
       name,
       email,
       password,
       cpf,
       whatsapp,
       role,
-      is_active: isActive // Mapear isActive para is_active
+      is_active: isActive, // Mapear isActive para is_active
+      birthdate: birthDate // Mapear birthDate para birthdate
     };
   }
   
-  // Caso contrário, retornar sem id
+  // Se não tem ID, é um novo usuário a ser criado
   return {
     name,
     email,
@@ -58,40 +71,29 @@ function toDbUser(user: Omit<User, 'id'> | User): Omit<DbUser, 'id'> | DbUser {
     cpf,
     whatsapp,
     role,
-    is_active: isActive // Mapear isActive para is_active
+    is_active: isActive, // Mapear isActive para is_active
+    birthdate: birthDate // Mapear birthDate para birthdate
   };
 }
 
 // Função para converter um User do banco para o modelo da aplicação
 function fromDbUser(dbUser: DbUser, originalUser?: Partial<User>): User {
-  // Se temos o usuário original, preservamos campos como birthDate
-  if (originalUser) {
-    return {
-      ...originalUser,
-      id: dbUser.id,
-      name: dbUser.name,
-      email: dbUser.email,
-      password: dbUser.password,
-      cpf: dbUser.cpf,
-      whatsapp: dbUser.whatsapp,
-      role: dbUser.role as UserRole,
-      isActive: dbUser.is_active !== false, // Importante: considerar undefined ou null como true
-      // birthDate é mantido do originalUser ou definido como string vazia
-      birthDate: originalUser.birthDate || ''
-    };
-  }
+  const { id, name, email, password, cpf, whatsapp, role, is_active, birthdate, ...rest } = dbUser;
   
-  // Se não temos o usuário original, criamos um com birthDate vazio
+  // Mapear usuário do formato do banco para o formato da aplicação
+  const isActive = is_active !== false; // Considerar undefined ou null como true
+  
   return {
-    id: dbUser.id,
-    name: dbUser.name,
-    email: dbUser.email,
-    password: dbUser.password,
-    cpf: dbUser.cpf,
-    whatsapp: dbUser.whatsapp,
-    role: dbUser.role as UserRole,
-    isActive: dbUser.is_active !== false, // Importante: considerar undefined ou null como true
-    birthDate: '' // Valor padrão, já que não está no banco
+    id,
+    name: name || '',
+    email: email || '',
+    password: password || '',
+    cpf: cpf || '',
+    birthDate: birthdate || '', // Mapear birthdate do banco para birthDate no app
+    whatsapp: whatsapp || '',
+    role: role as UserRole || 'user',
+    isActive,
+    ...originalUser
   };
 }
 
@@ -370,7 +372,7 @@ export const api = {
     
       // Verificar se o email já existe
       const existingUser = users.find((u) => u.email === userData.email);
-    if (existingUser) {
+      if (existingUser) {
         throw new Error('Este email já está em uso');
       }
 
@@ -409,8 +411,11 @@ export const api = {
         cpf: userData.cpf,
         whatsapp: userData.whatsapp || '',
         role: userData.role || 'user',
-        is_active: true // Todo novo usuário começa como ativo
+        is_active: true, // Todo novo usuário começa como ativo
+        birthdate: userData.birthDate || '' // Adicionando a data de nascimento
       };
+
+      console.log('Inserindo dados do usuário na tabela public.users:', userToInsert);
 
       // Agora inserimos os dados completos na tabela de usuários
       const { data: insertedData, error: insertError } = await supabaseAdmin
@@ -421,12 +426,15 @@ export const api = {
 
       if (insertError) {
         console.error('Erro ao inserir dados do usuário no Supabase:', insertError);
+        console.error('Detalhes do erro:', insertError.details, insertError.hint, insertError.message);
         // Se falhar, criar usuário apenas localmente
         console.log('Criando usuário apenas localmente como fallback');
+      } else {
+        console.log('Usuário inserido com sucesso na tabela public.users');
       }
 
       // Criar o usuário localmente (com os dados do banco ou nossos dados originais)
-    const newUser: User = {
+      const newUser: User = {
         id: userId,
         name: userData.name,
         email: userData.email,
@@ -441,7 +449,7 @@ export const api = {
       users.push(newUser);
       console.log('Usuário criado com sucesso:', newUser.name);
 
-    return newUser;
+      return newUser;
     } catch (error) {
       console.error('Erro ao registrar usuário:', error);
       throw error;
@@ -529,7 +537,7 @@ export const api = {
             email: dbUser.email || '',
             password: localUser?.password || '******',
             cpf: dbUser.cpf || '',
-            birthDate: dbUser.birthDate || '',
+            birthDate: dbUser.birthdate || '', // Mapear birthdate do banco para birthDate no app
             whatsapp: dbUser.whatsapp || '',
             role: dbUser.role as UserRole,
             isActive: dbUser.is_active !== false // Importante: considerar undefined ou null como true
@@ -550,18 +558,11 @@ export const api = {
         }));
       }
       
-      // Se não encontrou usuários no Supabase
-      console.log("Nenhum usuário encontrado no Supabase, usando dados locais");
-      return users.map(user => ({
-        ...user,
-        password: '******' // Não retornar senhas reais
-      }));
+      console.warn("Nenhum usuário encontrado no Supabase");
+      return [];
     } catch (error) {
-      console.error("Erro ao buscar usuários:", error);
-      return users.map(user => ({
-        ...user,
-        password: '******' // Não retornar senhas reais
-      }));
+      console.error("Erro ao buscar todos os usuários:", error);
+      throw error;
     }
   },
   
